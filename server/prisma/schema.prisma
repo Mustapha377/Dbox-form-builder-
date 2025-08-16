@@ -1,10 +1,237 @@
+// Enhanced Prisma Schema for Advanced Features
+
+generator client {
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("api_keys")
+}
+
+model MediaFile {
+  id        Int      @id @default(autoincrement())
+  filename  String
+  originalName String
+  mimeType  String
+  size      Int
+  url       String
+  userId    Int?
+  formId    Int?
+  fieldId   Int?
+  responseId Int?
+  isPublic  Boolean  @default(false)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("media_files")
+}
+
+model Certificate {
+  id          Int      @id @default(autoincrement())
+  formId      Int
+  responseId  Int
+  templateId  String
+  recipientName String
+  recipientEmail String
+  certificateData Json
+  certificateUrl String
+  issuedAt    DateTime @default(now())
+  expiresAt   DateTime?
+  isRevoked   Boolean  @default(false)
+  revokedAt   DateTime?
+  
+  @@map("certificates")
+}
+
+model FormTheme {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  colors      Json     // Primary, secondary, background, etc.
+  fonts       Json     // Heading, body fonts
+  animations  Json     // Animation settings
+  customCSS   String?
+  isPublic    Boolean  @default(false)
+  isDefault   Boolean  @default(false)
+  createdBy   Int?
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("form_themes")
+}
+
+model NotificationSettings {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  formId    Int?     // If null, applies to all forms
+  email     Boolean  @default(true)
+  sms       Boolean  @default(false)
+  push      Boolean  @default(true)
+  slack     Boolean  @default(false)
+  discord   Boolean  @default(false)
+  events    Json     @default("[]") // Which events to notify about
+  schedule  Json     @default("{}") // When to send notifications
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("notification_settings")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  entityType String  // form, field, response, user, etc.
+  entityId  Int?
+  action    String   // create, update, delete, view, etc.
+  oldValues Json?
+  newValues Json?
+  metadata  Json     @default("{}")
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+  
+  @@map("audit_logs")
+}
+
+model FeatureFlag {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  isEnabled Boolean  @default(false)
+  config    Json     @default("{}")
+  rolloutPercentage Int @default(0)
+  userSegments Json  @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("feature_flags")
+}
+
+model Subscription {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  planId          String
+  status          String   // active, canceled, past_due, etc.
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean @default(false)
+  trialStart      DateTime?
+  trialEnd        DateTime?
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("subscriptions")
+}
+
+model Plan {
+  id          String   @id
+  name        String
+  description String?
+  price       Int      // Price in cents
+  currency    String   @default("USD")
+  interval    String   // month, year
+  features    Json     @default("{}")
+  limits      Json     @default("{}")
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("plans")
+}
+
+model Usage {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  resource  String   // forms, responses, storage, etc.
+  amount    Int
+  date      DateTime @db.Date
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, resource, date])
+  @@map("usage")
+}
+
+model FormVersion {
+  id        Int      @id @default(autoincrement())
+  formId    Int
+  version   Int
+  title     String
+  description String?
+  fields    Json
+  settings  Json
+  theme     Json
+  createdBy Int
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(false)
+  
+  @@unique([formId, version])
+  @@map("form_versions")
+}
+
+model CustomDomain {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  domain    String   @unique
+  status    String   @default("pending") // pending, active, failed
+  sslStatus String   @default("pending")
+  dnsRecords Json    @default("[]")
+  verificationToken String?
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("custom_domains")
+}
+
+model EmailTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String
+  subject   String
+  content   String   // HTML content
+  variables Json     @default("[]") // Available variables
+  isSystem  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("email_templates")
+}
+
+// Add the missing relation to User model
+model Subscription {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  planId          String
+  status          String
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean @default(false)
+  trialStart      DateTime?
+  trialEnd        DateTime?
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("subscriptions")
+}provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
 }
 
 model User {
@@ -14,27 +241,56 @@ model User {
   password  String
   plan      String   @default("Pro")
   language  String   @default("English")
+  avatar    String?
+  timezone  String   @default("UTC")
+  preferences Json   @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  forms     Form[]
+  
+  // Relations
+  forms              Form[]
+  collaborations     FormCollaborator[]
+  sentInvitations    FormInvitation[] @relation("InvitedBy")
+  receivedInvitations FormInvitation[] @relation("InvitedUser")
+  apiKeys            ApiKey[]
+  
+  @@map("users")
 }
 
 model Form {
-  id            Int        @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   title         String
   description   String?
-  status        String     @default("Draft")
-  responseCount Int        @default(0)
-  views         Int        @default(0)
-  created       DateTime   @default(now())
-  lastResponse  DateTime?
+  status        String   @default("Draft")
+  responseCount Int      @default(0)
+  views         Int      @default(0)
   userId        Int
-  settings      Json
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  fields        Field[]
+  settings      Json     @default("{}")
+  theme         Json     @default("{}")
+  securitySettings Json  @default("{}")
+  branding      Json     @default("{}")
+  customDomain  String?
+  isPublished   Boolean  @default(false)
+  publishedAt   DateTime?
+  expiresAt     DateTime?
+  maxResponses  Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastResponse  DateTime?
+  
+  // Relations
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fields        Field[]
   responses     Response[]
+  collaborators FormCollaborator[]
+  invitations   FormInvitation[]
+  views         FormView[]
+  interactions  FormInteraction[]
+  webhooks      Webhook[]
+  integrations  Integration[]
+  analytics     FormAnalytics[]
+  
+  @@map("forms")
 }
 
 model Field {
@@ -45,25 +301,237 @@ model Field {
   description String?
   required    Boolean  @default(false)
   options     Json?
-  calculation Json?
-  amount      Float?
-  currency    String?
-  conditions  Json?
-  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  validation  Json?
+  conditional Json?    // Conditional logic rules
+  calculation Json?    // For calculated fields
+  aiSettings  Json?    // AI validation settings
+  mediaSettings Json?  // Media field settings
+  position    Int      @default(0)
+  isActive    Boolean  @default(true)
+  metadata    Json     @default("{}")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  // Relations
+  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@map("fields")
 }
 
 model Response {
-  id          Int      @id @default(autoincrement())
-  formId      Int
-  email       String?
-  data          Json
+  id            Int      @id @default(autoincrement())
+  formId        Int
+  email         String?
+  data          Json     @default("{}")
+  metadata      Json     @default("{}") // IP, user agent, device info
   paymentId     String?
   paymentStatus String?
-  submittedAt DateTime @default(now())
-  responses   Json
+  paymentAmount Float?
+  completionTime Int?   // In seconds
+  fraudScore    Int?    // 0-100 fraud risk score
+  sentiment     String? // positive, negative, neutral
+  sentimentScore Float?
+  emotions      Json?   // Array of detected emotions
+  geoLocation   Json?   // Location data if provided
+  deviceInfo    Json?   // Device and browser information
+  startedAt     DateTime?
+  submittedAt   DateTime @default(now())
+  isComplete    Boolean  @default(true)
+  isSpam        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  form          Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@map("responses")
+}
+
+model FormCollaborator {
+  id        Int      @id @default(autoincrement())
+  formId    Int
+  userId    Int
+  role      String   // viewer, editor, admin
+  addedBy   Int
+  permissions Json   @default("{}")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([formId, userId])
+  @@map("form_collaborators")
+}
+
+model FormInvitation {
+  id        Int      @id @default(autoincrement())
+  formId    Int
+  email     String
+  role      String
+  token     String   @unique
+  invitedBy Int
+  userId    Int?     // Set when user accepts invitation
+  status    String   @default("pending") // pending, accepted, expired
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  inviter   User     @relation("InvitedBy", fields: [invitedBy], references: [id])
+  user      User?    @relation("InvitedUser", fields: [userId], references: [id])
+  
+  @@map("form_invitations")
+}
+
+model FormView {
+  id         Int      @id @default(autoincrement())
+  formId     Int
+  sessionId  String
+  ipAddress  String
+  userAgent  String?
+  referer    String?
+  deviceType String?  // mobile, tablet, desktop
+  country    String?
+  city       String?
+  viewedAt   DateTime @default(now())
+  duration   Int?     // Time spent viewing in seconds
+  completed  Boolean  @default(false)
+  
+  // Relations
+  form       Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@map("form_views")
+}
+
+model FormInteraction {
+  id              Int      @id @default(autoincrement())
+  formId          Int
+  fieldId         Int?
+  sessionId       String
+  interactionType String   // click, focus, blur, scroll, hover
+  xPosition       Float?
+  yPosition       Float?
+  elementId       String?
+  elementClass    String?
+  value           String?
+  timestamp       DateTime @default(now())
+  
+  // Relations
+  form            Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@map("form_interactions")
+}
+
+model Webhook {
+  id        Int      @id @default(autoincrement())
+  formId    Int
+  url       String
+  events    Json     // Array of events to listen for
+  headers   Json     @default("{}")
+  secret    String?
+  isActive  Boolean  @default(true)
+  lastFired DateTime?
+  failureCount Int   @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  logs      WebhookLog[]
+  
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id         Int      @id @default(autoincrement())
+  webhookId  Int
+  event      String
+  payload    Json
+  response   Json?
+  statusCode Int?
+  success    Boolean
+  error      String?
+  firedAt    DateTime @default(now())
+  
+  // Relations
+  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  
+  @@map("webhook_logs")
+}
+
+model Integration {
+  id        Int      @id @default(autoincrement())
+  formId    Int
+  provider  String   // slack, discord, whatsapp, zapier, mailchimp, etc.
+  config    Json     // Provider-specific configuration
+  isActive  Boolean  @default(true)
+  lastSync  DateTime?
+  errorCount Int     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@map("integrations")
+}
+
+model FormAnalytics {
+  id          Int      @id @default(autoincrement())
+  formId      Int
+  date        DateTime @db.Date
+  views       Int      @default(0)
+  responses   Int      @default(0)
+  completions Int      @default(0)
+  avgTime     Float?   // Average completion time
+  bounceRate  Float?   // Percentage who left without completing
+  deviceStats Json     @default("{}")
+  locationStats Json   @default("{}")
+  referrerStats Json   @default("{}")
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@unique([formId, date])
+  @@map("form_analytics")
+}
+
+model Template {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  category    String
+  thumbnail   String?
+  fields      Json
+  settings    Json     @default("{}")
+  theme       Json     @default("{}")
+  isPublic    Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  usageCount  Int      @default(0)
+  rating      Float    @default(0)
+  tags        Json     @default("[]")
+  createdBy   Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@map("templates")
+}
+
+model ApiKey {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  key       String   @unique
+  permissions Json   @default("[]") // Array of permissions
+  isActive  Boolean  @default(true)
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
