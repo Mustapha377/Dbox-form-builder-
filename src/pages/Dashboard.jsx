@@ -1,72 +1,183 @@
-import { motion } from 'framer-motion';
-import { useState } from 'react';
+import React from 'react';
+import { FileText, Users, DollarSign, TrendingUp, Search, Plus, Eye, Share2, BarChart3, Globe } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-const Dashboard = () => {
-  const [language, setLanguage] = useState('English');
-  const recentForms = [
-    { name: 'Event Registration', created: '2025-08-12', responses: 5 },
-    { name: 'Student Survey', created: '2025-08-11', responses: 10 },
-  ];
+const Dashboard = ({ user, forms, setCurrentView, searchQuery, setSearchQuery, setShowShareModal, isMobile }) => {
+  const navigate = useNavigate();
+
+  const handleCreateForm = () => {
+    setCurrentView('builder');
+  };
+
+  const handleViewForm = (formId) => {
+    navigate(`/form/${formId}`);
+  };
+
+  const handleShareForm = (formId) => {
+    setShowShareModal(true);
+    // Add logic to set the form ID for sharing if needed
+  };
+
+  // Filter forms based on searchQuery
+  const filteredForms = forms.filter((form) =>
+    form.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Calculate total responses (assuming form.responses exists, adjust if needed)
+  const totalResponses = forms.reduce((sum, form) => sum + (form.responses || 0), 0);
 
   return (
-    <div className="p-4 bg-white min-h-screen">
-      {/* Navigation */}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Dashboard</h2>
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="p-2 border rounded"
-        >
-          <option value="English">English</option>
-          <option value="Hausa">Hausa</option>
-          <option value="Yoruba">Yoruba</option>
-          <option value="Igbo">Igbo</option>
-        </select>
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+          Sannu da zuwa, {user?.name || 'User'}! 👋
+        </h1>
+        <p className="text-sm sm:text-base text-gray-600">Manage your forms and view analytics</p>
       </div>
 
-      {/* Welcome Section */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="bg-green-50 p-4 rounded-lg mb-4 text-center"
-      >
-        <h1 className="text-2xl font-bold text-green-600">Karibu Mustapha!</h1>
-        <p className="text-gray-600">Create your first form!</p>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          className="mt-4 px-6 py-2 bg-green-600 text-white rounded"
-        >
-          Create New Form
-        </motion.button>
-      </motion.div>
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-4 mb-6 sm:mb-8">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Forms</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">{forms.length}</p>
+            </div>
+            <FileText className="w-10 sm:w-12 h-10 sm:h-12 text-blue-500 opacity-20" />
+          </div>
+          <p className="text-xs sm:text-sm text-green-600 mt-2">+2 this week</p>
+        </div>
 
-      {/* Recent Forms */}
-      <div className="bg-white p-4 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-2">Recent Forms</h3>
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b">
-              <th className="p-2">Form Name</th>
-              <th className="p-2">Created</th>
-              <th className="p-2">Responses</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentForms.map((form) => (
-              <tr key={form.name} className="border-b">
-                <td className="p-2">{form.name}</td>
-                <td className="p-2">{form.created}</td>
-                <td className="p-2">{form.responses}</td>
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Responses</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">{totalResponses}</p>
+            </div>
+            <Users className="w-10 sm:w-12 h-10 sm:h-12 text-green-500 opacity-20" />
+          </div>
+          <p className="text-xs sm:text-sm text-green-600 mt-2">+15 today</p>
+        </div>
+
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Revenue This Month</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">₦45,200</p>
+            </div>
+            <DollarSign className="w-10 sm:w-12 h-10 sm:h-12 text-purple-500 opacity-20" />
+          </div>
+          <p className="text-xs sm:text-sm text-green-600 mt-2">+12% from last month</p>
+        </div>
+
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Conversion Rate</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">73%</p>
+            </div>
+            <TrendingUp className="w-10 sm:w-12 h-10 sm:h-12 text-orange-500 opacity-20" />
+          </div>
+          <p className="text-xs sm:text-sm text-green-600 mt-2">+5% improvement</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-6 border-b space-y-3 sm:space-y-0">
+          <h2 className="text-lg sm:text-xl font-semibold">Recent Forms</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:w-auto">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search forms..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full sm:w-auto pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+              />
+            </div>
+            <button 
+              onClick={handleCreateForm}
+              className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Form
+            </button>
+          </div>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Form Name</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Status</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Responses</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Views</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Last Response</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredForms.map((form) => (
+                <tr key={form.id} className="border-b hover:bg-gray-50">
+                  <td className="p-3 sm:p-4">
+                    <div>
+                      <p className="font-medium text-sm sm:text-base text-gray-900">{form.title}</p>
+                      <p className="text-xs sm:text-sm text-gray-500">
+                        Created {new Date(form.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="p-3 sm:p-4">
+                    <div className="flex items-center space-x-2">
+                      {form.status === 'Published' && <Globe className="w-4 h-4 text-green-500" />}
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        form.status === 'Published' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {form.status || 'Draft'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="p-3 sm:p-4 font-medium text-sm sm:text-base">{form.responses || 0}</td>
+                  <td className="p-3 sm:p-4 text-gray-600 text-sm sm:text-base">{form.views || 0}</td>
+                  <td className="p-3 sm:p-4 text-gray-600 text-sm sm:text-base">
+                    {form.lastResponse ? new Date(form.lastResponse).toLocaleDateString() : 'N/A'}
+                  </td>
+                  <td className="p-3 sm:p-4">
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={() => handleViewForm(form.id)}
+                        className="p-1 hover:bg-gray-100 rounded"
+                        title="View Form"
+                      >
+                        <Eye className="w-4 h-4 text-gray-400" />
+                      </button>
+                      <button 
+                        onClick={() => handleShareForm(form.id)}
+                        className="p-1 hover:bg-gray-100 rounded"
+                        title="Share Form"
+                      >
+                        <Share2 className="w-4 h-4 text-gray-400" />
+                      </button>
+                      <button 
+                        onClick={() => setCurrentView('analytics')}
+                        className="p-1 hover:bg-gray-100 rounded"
+                        title="View Analytics"
+                      >
+                        <BarChart3 className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 };
 
 export default Dashboard;
-

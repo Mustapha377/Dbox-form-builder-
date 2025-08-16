@@ -1,75 +1,88 @@
-import { BarChart, Bar, XAxis, YAxis, PieChart, Pie, Cell } from 'recharts';
+import React from 'react';
+import { Search, FileSpreadsheet, Download, Filter, Eye } from 'lucide-react';
 
-const Responses = () => {
-  const data = [
-    { name: 'Option 1', value: 10 },
-    { name: 'Option 2', value: 15 },
-    { name: 'Option 3', value: 5 },
-  ];
-  const responses = [
-    { answer: 'Yes', option: 'Option 1', date: '2025-08-12' },
-    { answer: 'No', option: 'Option 2', date: '2025-08-12' },
-  ];
+const Responses = ({ responses, forms }) => {
+  if (!forms) return <div>Loading forms...</div>;
+  if (!responses) return <div>Loading responses...</div>;
 
   return (
-    <div className="p-4 bg-white min-h-screen">
-      {/* Filters */}
-      <div className="flex justify-between mb-4">
-        <input placeholder="Search" className="p-2 border rounded" />
-        <select className="p-2 border rounded">
-          <option>Date Range</option>
-          <option>Today</option>
-          <option>This Week</option>
-        </select>
-        <button className="px-4 py-2 bg-gray-500 text-white rounded">Export</button>
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Form Responses</h1>
+        <p className="text-sm sm:text-base text-gray-600">View and manage form submissions</p>
       </div>
 
-      {/* Table */}
-      <table className="w-full text-left mb-4">
-        <thead>
-          <tr className="border-b">
-            <th className="p-2">Short Answer</th>
-            <th className="p-2">Option</th>
-            <th className="p-2">Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {responses.map((resp, index) => (
-            <tr key={index} className="border-b">
-              <td className="p-2">{resp.answer}</td>
-              <td className="p-2">{resp.option}</td>
-              <td className="p-2">{resp.date}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="bg-white rounded-lg shadow-sm border">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-6 border-b space-y-3 sm:space-y-0">
+          <h2 className="text-lg sm:text-xl font-semibold">Recent Responses</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:w-auto">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search responses..."
+                className="w-full sm:w-auto pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+              />
+            </div>
+            <button className="flex items-center px-3 sm:px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm sm:text-base">
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Export CSV
+            </button>
+            <button className="flex items-center px-3 sm:px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm sm:text-base">
+              <Download className="w-4 h-4 mr-2" />
+              Export PDF
+            </button>
+            <button className="flex items-center px-3 sm:px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm sm:text-base">
+              <Filter className="w-4 h-4 mr-2" />
+              Filter
+            </button>
+          </div>
+        </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <PieChart width={300} height={200}>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            outerRadius={80}
-            fill="#8884d8"
-          >
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={`#${Math.floor(Math.random()*16777215).toString(16)}`} />
-            ))}
-          </Pie>
-        </PieChart>
-        <BarChart width={300} height={200} data={data}>
-          <XAxis dataKey="name" />
-          <YAxis />
-          <Bar dataKey="value" fill="#8884d8" />
-        </BarChart>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Submitted</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Email</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Form</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Status</th>
+                <th className="text-left p-3 sm:p-4 font-medium text-gray-700 text-sm sm:text-base">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {responses.map((response) => (
+                <tr key={response.id} className="border-b hover:bg-gray-50">
+                  <td className="p-3 sm:p-4 text-gray-600 text-sm sm:text-base">
+                    {new Date(response.submittedAt).toLocaleString()}
+                  </td>
+                  <td className="p-3 sm:p-4 font-medium text-sm sm:text-base">{response.email || 'N/A'}</td>
+                  <td className="p-3 sm:p-4 text-gray-600 text-sm sm:text-base">
+                    {forms.find((f) => f.id === response.formId)?.title || 'Unknown Form'}
+                  </td>
+                  <td className="p-3 sm:p-4">
+                    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                      Complete
+                    </span>
+                  </td>
+                  <td className="p-3 sm:p-4">
+                    <div className="flex items-center space-x-2">
+                      <button className="p-1 hover:bg-gray-100 rounded">
+                        <Eye className="w-4 h-4 text-gray-400" />
+                      </button>
+                      <button className="p-1 hover:bg-gray-100 rounded">
+                        <Download className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 };
 
 export default Responses;
-
