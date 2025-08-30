@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 const prisma = new PrismaClient();
 const router = express.Router();
 
-router.get('/forms', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     console.log('Received token for forms:', token);
@@ -20,7 +20,20 @@ router.get('/forms', async (req, res) => {
         id: true,
         title: true,
         description: true,
-        fields: true,
+        fields: {
+          select: {
+            id: true,
+            type: true,
+            question: true,
+            description: true,
+            required: true,
+            options: true,
+            calculation: true,
+            // Removed 'order' field
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
         views: true,
         createdAt: true,
         updatedAt: true,
@@ -42,11 +55,11 @@ router.get('/forms', async (req, res) => {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 });
 
-router.post('/forms', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     console.log('Received token for form creation:', token);
@@ -54,10 +67,10 @@ router.post('/forms', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized: No token provided' });
     }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const { title, description, fields, settings } = req.body;
+    const { title, description, settings } = req.body;
 
-    if (!title || !fields) {
-      return res.status(400).json({ error: 'Title and fields are required' });
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
     }
 
     const form = await prisma.form.create({
@@ -65,7 +78,6 @@ router.post('/forms', async (req, res) => {
         userId: decoded.userId,
         title: title || 'Untitled Form',
         description: description || '',
-        fields: fields || [],
         settings: settings || {},
         views: 0,
       },
@@ -87,11 +99,11 @@ router.post('/forms', async (req, res) => {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 });
 
-router.delete('/forms/:id', async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     console.log('Received token for form delete:', token);

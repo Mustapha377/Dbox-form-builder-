@@ -1,99 +1,62 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import  authenticate from '../middleware/auth.js';
+import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Get responses for user's forms
-router.get('/responses', authenticate, async (req, res) => {
+router.get('/:formId', async (req, res) => {
   try {
-    console.log('User from token for responses:', req.user);
-    
-    // First get all forms belonging to this user
-    const forms = await prisma.form.findMany({
-      where: { userId: req.user.userId },
-      select: { id: true },
-    });
+    const token = req.headers.authorization?.split(' ')[1];
+    console.log('Received token for responses:', token);
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const formId = parseInt(req.params.formId);
 
-    const formIds = forms.map((form) => form.id);
-    console.log('User form IDs:', formIds);
-
-    // Handle case where user has no forms
-    if (formIds.length === 0) {
-      console.log('User has no forms, returning empty array');
-      return res.json([]);
+    if (isNaN(formId)) {
+      return res.status(400).json({ error: 'Invalid form ID' });
     }
 
-    // Get responses without specifying select to see all available fields
-    const responses = await prisma.response.findMany({
-      where: { 
-        formId: { in: formIds } 
-      }
-    });
-
-    console.log('Found responses:', responses.length);
-    console.log('Sample response fields:', responses[0] ? Object.keys(responses[0]) : 'No responses');
-    res.json(responses);
-  } catch (error) {
-    console.error('Responses error:', error);
-    res.status(500).json({ error: 'Failed to fetch responses' });
-  }
-});
-
-// Create a new response (for form submissions)
-router.post('/responses', async (req, res) => {
-  try {
-    const { formId } = req.body;
-
-    // Verify form exists
     const form = await prisma.form.findFirst({
       where: {
-        id: formId
-      }
+        id: formId,
+        userId: decoded.userId,
+      },
     });
 
     if (!form) {
-      return res.status(404).json({ error: 'Form not found' });
-    }
-
-    // Create response with minimal data first
-    const response = await prisma.response.create({
-      data: {
-        formId
-      }
-    });
-
-    res.status(201).json(response);
-  } catch (error) {
-    console.error('Response creation error:', error);
-    res.status(500).json({ error: 'Failed to create response' });
-  }
-});
-
-// Get responses for a specific form
-router.get('/responses/:formId', authenticate, async (req, res) => {
-  try {
-    // Verify the form belongs to the user
-    const form = await prisma.form.findFirst({
-      where: {
-        id: req.params.formId,
-        userId: req.user.userId
-      }
-    });
-
-    if (!form) {
-      return res.status(404).json({ error: 'Form not found' });
+      return res.status(404).json({ error: 'Form not found or you do not have permission' });
     }
 
     const responses = await prisma.response.findMany({
-      where: { formId: req.params.formId }
+      where: {
+        formId,
+      },
+      select: {
+        id: true,
+        email: true,
+        data: true,
+        submittedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        submittedAt: 'desc',
+      },
     });
 
     res.json(responses);
   } catch (error) {
-    console.error('Form responses error:', error);
-    res.status(500).json({ error: 'Failed to fetch form responses' });
+    console.error('Responses error:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+    res.status(500).json({
+      error: 'Failed to fetch responses',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
   }
 });
 

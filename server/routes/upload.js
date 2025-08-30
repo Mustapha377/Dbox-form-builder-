@@ -1,6 +1,6 @@
 import express from 'express';
   import multer from 'multer';
-  import authenticate from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 
   const router = express.Router();
 
@@ -14,7 +14,7 @@ import express from 'express';
   });
   const upload = multer({ storage });
 
-  router.post('/', authenticate, upload.single('file'), (req, res) => {
+  router.post('/', authenticateToken, upload.single('file'), (req, res) => {
     res.json({ filePath: `/uploads/${req.file.filename}` });
   });
 

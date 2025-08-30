@@ -1,12 +1,16 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import DboxSystem from '../DboxSystem';
 
 
+// Main App component with Router
 const App = () => {
   return (
-    <>
-       <DboxSystem />
-    </>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/*" element={<DboxSystem />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 };
 
