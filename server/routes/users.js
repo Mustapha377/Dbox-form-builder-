@@ -1,4 +1,4 @@
-// routes/users.js - Updated user routes
+// routes/users.js - Fixed user routes with consistent user ID access
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken } from '../middleware/auth.js';
@@ -7,11 +7,25 @@ import { body, validationResult } from 'express-validator';
 const prisma = new PrismaClient();
 const router = express.Router();
 
+// Helper function to get user ID consistently
+const getUserId = (req) => {
+  return req.user?.id || req.userId || req.user?.userId;
+};
+
 // Get current user profile
 router.get('/me', authenticateToken, async (req, res) => {
   try {
+    const userId = getUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({
+        error: 'User ID not found',
+        code: 'NO_USER_ID'
+      });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: req.userId },
+      where: { id: parseInt(userId) },
       select: {
         id: true,
         name: true,
@@ -71,6 +85,15 @@ router.patch('/me', authenticateToken, [
       });
     }
 
+    const userId = getUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({
+        error: 'User ID not found',
+        code: 'NO_USER_ID'
+      });
+    }
+
     const { name, language } = req.body;
     const updateData = {};
 
@@ -78,7 +101,7 @@ router.patch('/me', authenticateToken, [
     if (language !== undefined) updateData.language = language;
 
     const updatedUser = await prisma.user.update({
-      where: { id: req.userId },
+      where: { id: parseInt(userId) },
       data: updateData,
       select: {
         id: true,
@@ -107,9 +130,18 @@ router.patch('/me', authenticateToken, [
 // Delete user account
 router.delete('/me', authenticateToken, async (req, res) => {
   try {
+    const userId = getUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({
+        error: 'User ID not found',
+        code: 'NO_USER_ID'
+      });
+    }
+
     // Delete user and all related data (cascade delete should handle this)
     await prisma.user.delete({
-      where: { id: req.userId }
+      where: { id: parseInt(userId) }
     });
 
     res.json({

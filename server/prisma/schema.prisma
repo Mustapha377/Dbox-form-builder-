@@ -1,40 +1,53 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
 }
 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 model User {
   id        Int      @id @default(autoincrement())
-  name      String
   email     String   @unique
+  name      String
   password  String
-  plan      String   @default("Pro")
+  plan      String   @default("Free")
   language  String   @default("English")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  // Relationships
   forms     Form[]
+
+  @@map("users")
 }
 
 model Form {
-  id            Int        @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   title         String
   description   String?
-  status        String     @default("Draft")
-  responseCount Int        @default(0)
-  views         Int        @default(0)
-  created       DateTime   @default(now())
+  headerImage   String?
+  accentColor   String   @default("#3b82f6")
+  status        String   @default("DRAFT")
+  responseCount Int      @default(0)
+  views         Int      @default(0)
+  settings      Json     @default("{}")
   lastResponse  DateTime?
   userId        Int
-  settings      Json
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  fields        Field[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relationships
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fields        Field[]
+  sections      Section[]
   responses     Response[]
+
+  @@map("forms")
 }
 
 model Field {
@@ -45,25 +58,50 @@ model Field {
   description String?
   required    Boolean  @default(false)
   options     Json?
-  calculation Json?
-  amount      Float?
+  calculation String?
+  amount      Decimal?
   currency    String?
   conditions  Json?
-  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  order       Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@map("fields")
+}
+
+model Section {
+  id          Int      @id @default(autoincrement())
+  formId      Int
+  title       String
+  description String?
+  order       Int?
+  conditions  Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@map("sections")
 }
 
 model Response {
-  id          Int      @id @default(autoincrement())
-  formId      Int
-  email       String?
-  data          Json
+  id            Int      @id @default(autoincrement())
+  formId        Int
+  email         String?
+  data          Json     @default("{}")
+  responses     Json     @default("{}")  // Keep for backward compatibility
   paymentId     String?
   paymentStatus String?
-  submittedAt DateTime @default(now())
-  responses   Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  submittedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relationships
+  form          Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@map("responses")
 }

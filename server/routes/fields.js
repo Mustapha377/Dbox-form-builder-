@@ -34,12 +34,23 @@ router.get('/:formId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid form ID', details: 'formId must be a valid integer' });
     }
 
+    // First verify the user owns the form
+    const form = await prisma.form.findFirst({
+      where: {
+        id: formId,
+        userId: decoded.userId,
+      },
+    });
+
+    if (!form) {
+      console.error('Form not found for formId:', formId, 'userId:', decoded.userId);
+      return res.status(404).json({ error: 'Form not found or you do not have permission' });
+    }
+
+    // Now get fields for this form
     const fields = await prisma.field.findMany({
       where: {
-        formId,
-        form: {
-          userId: decoded.userId,
-        },
+        formId: formId,
       },
       select: {
         id: true,
@@ -60,6 +71,7 @@ router.get('/:formId', async (req, res) => {
       },
     });
 
+    console.log(`Found ${fields.length} fields for form ${formId}`);
     res.json(fields);
   } catch (error) {
     console.error('Error fetching fields:', error);
@@ -100,7 +112,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid question', details: `question must be a non-empty string, received: ${question}` });
     }
 
-    // Validate form existence
+    // Validate form existence and ownership
     const form = await prisma.form.findFirst({
       where: {
         id: parseInt(formId),
@@ -167,6 +179,69 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Add PATCH route for updating fields
+router.patch('/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    console.log('Received token for field update:', token);
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const fieldId = parseInt(req.params.id);
+
+    if (isNaN(fieldId)) {
+      return res.status(400).json({ error: 'Invalid field ID' });
+    }
+
+    // Verify field exists and user owns the form
+    const field = await prisma.field.findUnique({
+      where: { id: fieldId },
+      include: {
+        form: {
+          select: { userId: true }
+        }
+      }
+    });
+
+    if (!field || field.form.userId !== decoded.userId) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this field' });
+    }
+
+    // Update the field
+    const updatedField = await prisma.field.update({
+      where: { id: fieldId },
+      data: req.body,
+      select: {
+        id: true,
+        formId: true,
+        type: true,
+        question: true,
+        description: true,
+        required: true,
+        options: true,
+        calculation: true,
+        amount: true,
+        currency: true,
+        conditions: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json(updatedField);
+  } catch (error) {
+    console.error('Field update error:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+    res.status(500).json({
+      error: 'Failed to update field',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -177,13 +252,18 @@ router.delete('/:id', async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const fieldId = parseInt(req.params.id);
 
+    if (isNaN(fieldId)) {
+      return res.status(400).json({ error: 'Invalid field ID' });
+    }
+
+    // Verify field exists and user owns the form
     const field = await prisma.field.findUnique({
       where: { id: fieldId },
-      select: {
+      include: {
         form: {
-          select: { userId: true },
-        },
-      },
+          select: { userId: true }
+        }
+      }
     });
 
     if (!field || field.form.userId !== decoded.userId) {

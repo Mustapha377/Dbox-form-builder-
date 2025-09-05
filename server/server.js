@@ -1,4 +1,4 @@
-// server.js - Updated Express server setup
+// server.js - Fixed Express server setup
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -56,8 +56,8 @@ app.use(cors({
   origin: [
     'http://localhost:5173', 
     'https://localhost:5173',
-    'http://localhost:5000',
-    'https://localhost:5000'
+    'http://localhost:3000',
+    'https://localhost:3000'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -97,13 +97,41 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Public routes (no authentication required)
+// =====================================
+// PUBLIC ROUTES (no authentication)
+// =====================================
 app.use('/api/auth', authRoutes);
-app.use('/api/webhooks', webhooksRoutes); // Webhooks should be public
+app.use('/api/webhooks', webhooksRoutes);
 
-// Protected routes (authentication required)
+// =====================================
+// MIXED ROUTES (some public, some protected)
+// =====================================
+// Handle forms routes with selective authentication
+app.use('/api/forms', (req, res, next) => {
+  // Public routes that don't need authentication
+  const publicRoutes = [
+    { method: 'GET', pattern: /^\/\d+\/public$/ },      // GET /api/forms/123/public
+    { method: 'POST', pattern: /^\/\d+\/responses$/ }    // POST /api/forms/123/responses
+  ];
+  
+  const isPublicRoute = publicRoutes.some(route => 
+    req.method === route.method && route.pattern.test(req.path)
+  );
+  
+  if (isPublicRoute) {
+    console.log(`🔓 Public route accessed: ${req.method} ${req.path}`);
+    return next();
+  }
+  
+  // All other form routes require authentication
+  console.log(`🔒 Protected route accessed: ${req.method} ${req.path}`);
+  return authenticateToken(req, res, next);
+}, formRoutes);
+
+// =====================================
+// PROTECTED ROUTES (require authentication)
+// =====================================
 app.use('/api/users', authenticateToken, usersRoutes);
-app.use('/api/forms', authenticateToken, formRoutes);
 app.use('/api/fields', authenticateToken, fieldsRoutes);
 app.use('/api/responses', authenticateToken, responsesRoutes);
 app.use('/api/uploads', authenticateToken, uploadRoutes);
@@ -142,6 +170,7 @@ app.use((err, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
+  console.log(`🔍 404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ 
     error: `Route ${req.originalUrl} not found`,
     code: 'ROUTE_NOT_FOUND',
@@ -179,6 +208,19 @@ app.listen(PORT, HOST, async () => {
   await testDatabaseConnection();
   
   console.log('🎉 Server startup complete!');
+  console.log('\n📋 Available routes:');
+  console.log('   PUBLIC:');
+  console.log('   - POST /api/auth/*');
+  console.log('   - GET  /api/forms/:id/public');
+  console.log('   - POST /api/forms/:id/responses');
+  console.log('   - POST /api/webhooks/*');
+  console.log('   PROTECTED (require JWT):');
+  console.log('   - GET|POST|PUT|DELETE /api/forms');
+  console.log('   - GET|POST|PUT|DELETE /api/responses');
+  console.log('   - GET|POST|PUT|DELETE /api/users');
+  console.log('   - GET|POST|PUT|DELETE /api/fields');
+  console.log('   - GET|POST|PUT|DELETE /api/uploads');
+  console.log('   - GET|POST|PUT|DELETE /api/payments');
 });
 
 // Graceful shutdown

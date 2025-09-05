@@ -1,102 +1,47 @@
-// middleware/auth.js - Enhanced authentication middleware
+// middleware/auth.js - Fixed authentication middleware
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
-
-export const authenticateToken = async (req, res, next) => {
+export const authenticateToken = (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
+    
+    console.log('🔐 Auth middleware - Token received:', token ? 'Present' : 'Missing');
+    
     if (!token) {
+      console.log('❌ No token provided');
       return res.status(401).json({ 
         error: 'Access token required',
-        code: 'MISSING_TOKEN'
+        code: 'NO_TOKEN'
       });
     }
-
-    // Verify the token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Check if user still exists
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        plan: true,
-        language: true,
-        createdAt: true,
-        updatedAt: true
+    // Verify token
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+      if (err) {
+        console.log('❌ Token verification failed:', err.message);
+        return res.status(403).json({ 
+          error: 'Invalid or expired token',
+          code: 'INVALID_TOKEN'
+        });
       }
+      
+      // Set both req.userId and req.user for compatibility
+      req.userId = decoded.userId;
+      req.user = { 
+        id: decoded.userId,
+        userId: decoded.userId 
+      };
+      
+      console.log('✅ Token verified for user:', decoded.userId);
+      next();
     });
-
-    if (!user) {
-      return res.status(401).json({ 
-        error: 'User not found',
-        code: 'USER_NOT_FOUND'
-      });
-    }
-
-    // Attach user to request
-    req.user = user;
-    req.userId = user.id;
     
-    next();
   } catch (error) {
-    console.error('Authentication error:', error);
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        error: 'Token expired',
-        code: 'TOKEN_EXPIRED'
-      });
-    }
-    
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
-        error: 'Invalid token',
-        code: 'INVALID_TOKEN'
-      });
-    }
-    
+    console.error('❌ Auth middleware error:', error);
     return res.status(500).json({ 
-      error: 'Authentication failed',
+      error: 'Authentication error',
       code: 'AUTH_ERROR'
     });
-  }
-};
-
-// Optional authentication - for routes that can work with or without auth
-export const optionalAuth = async (req, res, next) => {
-  try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          plan: true,
-          language: true
-        }
-      });
-
-      if (user) {
-        req.user = user;
-        req.userId = user.id;
-      }
-    }
-    
-    next();
-  } catch (error) {
-    // For optional auth, continue even if token is invalid
-    next();
   }
 };
