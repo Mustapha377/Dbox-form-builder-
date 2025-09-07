@@ -4,6 +4,7 @@ import FieldRenderer from '../component/FieldRenderer';
 import QuestionLibrary from '../component/QuestionLibrary';
 import HeaderEditor from '../component/HeaderEditor';
 import { EmailRecognitionBanner, useEmailRecognition } from '../component/EmailRecognition';
+import { validateForm } from '../utils/validate';
 import { v4 as uuidv4 } from 'uuid';
 import { createForm, updateForm, submitResponse } from '../api/index';
 import {
@@ -11,7 +12,8 @@ import {
   CreditCard, Calculator, Star, Clock, AlignLeft, Image, PlusCircle, Shuffle,
   Eye, Settings, ChevronDown, ChevronRight, X, CheckCircle, AlertCircle,
   Palette, FileText, Send, Trash2, QrCode, Mail, Share2, Copy, PartyPopper,
-  RotateCcw, Phone, Globe
+  RotateCcw, Phone, Globe, Wifi, WifiOff,
+  TriangleAlert, 
 } from 'lucide-react';
 
 const PALETTE = [
@@ -25,7 +27,6 @@ const PALETTE = [
   { id: 'teal', name: 'Ocean Teal', color: '#14B8A6' }
 ];
 
-// Updated FIELD_TYPES to match template format
 const FIELD_TYPES = [
   { type: 'SHORT_ANSWER', label: 'Short Answer', icon: Type, category: 'text' },
   { type: 'PARAGRAPH', label: 'Paragraph', icon: AlignLeft, category: 'text' },
@@ -46,19 +47,23 @@ const FIELD_TYPES = [
   { type: 'SECTION_HEADER', label: 'Section Break', icon: AlignLeft, category: 'layout' }
 ];
 
-const SuccessModal = ({ isVisible, onClose, onFillAnother, formTitle }) => {
+// Professional Success Modal
+const ProfessionalSuccessModal = ({ isVisible, onClose, onFillAnother, formTitle }) => {
   if (!isVisible) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-scale-in">
         <div className="p-6 text-center">
           <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-            <PartyPopper className="w-8 h-8 text-green-600" />
+            <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Form Submitted Successfully!</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            Submission Successful!
+          </h3>
           <p className="text-gray-600 mb-6">
-            Thank you for completing "{formTitle}". Your response has been recorded.
+            Thank you for completing <span className="font-semibold">"{formTitle}"</span>. 
+            Your response has been securely recorded and saved.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <button
@@ -66,7 +71,7 @@ const SuccessModal = ({ isVisible, onClose, onFillAnother, formTitle }) => {
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               <RotateCcw className="w-4 h-4" />
-              Fill Another Form
+              Fill Another Response
             </button>
             <button
               onClick={onClose}
@@ -75,7 +80,108 @@ const SuccessModal = ({ isVisible, onClose, onFillAnother, formTitle }) => {
               Close
             </button>
           </div>
+          <p className="text-xs text-gray-500 mt-4">
+            Your data is protected and handled according to our privacy policy
+          </p>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// Professional Alert Dialog
+const ProfessionalAlert = ({ isVisible, onClose, title, message, type = 'warning', onConfirm, showCancel = false }) => {
+  if (!isVisible) return null;
+
+  const iconColor = {
+    error: 'text-red-600',
+    warning: 'text-yellow-600',
+    info: 'text-blue-600',
+    success: 'text-green-600'
+  };
+
+  const bgColor = {
+    error: 'bg-red-100',
+    warning: 'bg-yellow-100', 
+    info: 'bg-blue-100',
+    success: 'bg-green-100'
+  };
+
+  const buttonColor = {
+    error: 'bg-red-600 hover:bg-red-700',
+    warning: 'bg-yellow-600 hover:bg-yellow-700',
+    info: 'bg-blue-600 hover:bg-blue-700',
+    success: 'bg-green-600 hover:bg-green-700'
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className={`w-10 h-10 rounded-full ${bgColor[type]} flex items-center justify-center flex-shrink-0`}>
+              <TriangleAlert className={`w-5 h-5 ${iconColor[type]}`} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+              <p className="text-gray-600 text-sm leading-relaxed">{message}</p>
+            </div>
+          </div>
+          
+          <div className="flex gap-3 mt-6 justify-end">
+            {showCancel && (
+              <button
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (onConfirm) onConfirm();
+                onClose();
+              }}
+              className={`px-4 py-2 text-white rounded-lg transition-colors ${buttonColor[type]}`}
+            >
+              {type === 'error' ? 'Fix Issues' : 'Continue'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Professional Toast Notification
+const ToastNotification = ({ message, type, onClose, duration = 4000 }) => {
+  const [isVisible, setIsVisible] = useState(true);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+      setTimeout(onClose, 300);
+    }, duration);
+    
+    return () => clearTimeout(timer);
+  }, [duration, onClose]);
+
+  if (!isVisible) return null;
+
+  const styles = {
+    success: 'bg-green-50 border-green-200 text-green-800',
+    error: 'bg-red-50 border-red-200 text-red-800',
+    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+
+  return (
+    <div className={`fixed top-4 right-4 z-50 p-4 border rounded-lg shadow-lg max-w-sm ${styles[type]} animate-slide-in`}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{message}</span>
+        <button onClick={() => setIsVisible(false)} className="ml-3">
+          <X className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -84,7 +190,7 @@ const SuccessModal = ({ isVisible, onClose, onFillAnother, formTitle }) => {
 export default function FormBuilder({
   formData,
   setFormData,
-  fields = [], // Accept fields as props
+  fields = [],
   activeField,
   setActiveField,
   previewMode: externalPreviewMode,
@@ -119,7 +225,7 @@ export default function FormBuilder({
     setCurrentEmail
   } = useEmailRecognition();
 
-  // Local state for internal form builder functionality
+  // Enhanced state management
   const [localPreviewMode, setLocalPreviewMode] = useState(false);
   const [deviceView, setDeviceView] = useState('desktop');
   const [localFormValues, setLocalFormValues] = useState({});
@@ -132,6 +238,8 @@ export default function FormBuilder({
   const [saveStatus, setSaveStatus] = useState(null);
   const [isFormSaved, setIsFormSaved] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [validationAlert, setValidationAlert] = useState({ show: false, data: {} });
 
   // Use external props when available, fallback to local state
   const currentPreviewMode = externalPreviewMode !== undefined ? externalPreviewMode : localPreviewMode;
@@ -146,10 +254,10 @@ export default function FormBuilder({
   const currentShowShareModal = externalSetShowShareModal ? false : localShowShareModal;
   const setCurrentShowShareModal = externalSetShowShareModal || setLocalShowShareModal;
 
-  console.log('FormBuilder DEBUG - Received fields:', fields);
-  console.log('FormBuilder DEBUG - Fields length:', fields?.length || 0);
-  console.log('FormBuilder DEBUG - IsLoadingTemplate:', isLoadingTemplate);
-  console.log('FormBuilder DEBUG - TemplateFields:', templateFields);
+  // Show notification helper
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+  };
 
   // Auto-populate email field when current email changes
   useEffect(() => {
@@ -168,7 +276,7 @@ export default function FormBuilder({
     }
   }, [currentEmail, currentPreviewMode, fields, onFieldValueChange]);
 
-  // Enhanced onFieldValueChange to handle email recognition
+  // Enhanced field value change handler with real-time validation
   const handleFieldValueChange = (fieldId, value) => {
     if (onFieldValueChange) {
       onFieldValueChange(fieldId, value);
@@ -176,79 +284,94 @@ export default function FormBuilder({
       setLocalFormValues(prev => ({ ...prev, [fieldId]: value }));
     }
     
-    // Check if this is an email field and handle recognition
+    // Clear errors for this field when value changes
+    if (formErrors[fieldId]) {
+      setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldId];
+        return newErrors;
+      });
+    }
+    
+    // Handle email field changes
     const field = fields.find(f => f.id === fieldId);
     if (field && (field.type === 'EMAIL' || field.type === 'email')) {
       handleEmailFieldChange(fieldId, value);
     }
   };
 
-  // Handle email field changes to update recognition
+  // Enhanced email field handling with professional feedback
   const handleEmailFieldChange = (fieldId, email) => {
-    // If this is a valid email and not already recognized, add it
     if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       const isAlreadyRecognized = recognizedEmails.some(e => e.email === email);
       if (!isAlreadyRecognized) {
-        // Don't automatically add, just prepare for when form is submitted
+        showNotification('New email address detected. It will be saved for future use.', 'info');
       } else {
-        // Switch to this recognized email
         const existingEmail = recognizedEmails.find(e => e.email === email);
         if (existingEmail && currentEmail?.email !== email) {
           switchToEmail(existingEmail);
+          showNotification('Switched to previously used email address.', 'success');
         }
       }
     }
   };
 
-  // Validation functions
-  const validateField = (field, value) => {
-    const errors = [];
+  // Professional form validation with detailed feedback
+  const validateFormWithFeedback = () => {
+    const validation = validateForm(fields, currentFormValues);
     
-    if (field.validations?.some(v => v.type === 'required') && (!value || value.toString().trim() === '')) {
-      errors.push('This field is required');
+    if (validation.hasErrors) {
+      setFormErrors(validation.errors);
+      
+      const errorCount = Object.keys(validation.errors).length;
+      const fieldNames = Object.keys(validation.errors).map(fieldId => {
+        const field = fields.find(f => f.id === fieldId);
+        return field?.question || 'Unnamed field';
+      }).slice(0, 3);
+      
+      const fieldList = fieldNames.length > 2 
+        ? `${fieldNames.slice(0, -1).join(', ')}, and ${fieldNames.slice(-1)[0]}`
+        : fieldNames.join(' and ');
+      
+      setValidationAlert({
+        show: true,
+        data: {
+          title: 'Form Validation Required',
+          message: `Please complete the following required field${errorCount > 1 ? 's' : ''}: ${fieldList}${errorCount > 3 ? ` and ${errorCount - 3} more` : ''}.`,
+          type: 'warning'
+        }
+      });
+      
+      return false;
     }
     
-    if ((field.type === 'EMAIL' || field.type === 'email') && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      errors.push('Please enter a valid email address');
-    }
-    
-    return errors;
+    setFormErrors({});
+    return true;
   };
 
-  const validateForm = () => {
-    const errors = {};
-    let hasErrors = false;
-    
-    fields.forEach(field => {
-      const fieldErrors = validateField(field, currentFormValues[field.id]);
-      if (fieldErrors.length > 0) {
-        errors[field.id] = fieldErrors;
-        hasErrors = true;
-      }
-    });
-    
-    setFormErrors(errors);
-    return !hasErrors;
-  };
-
-  // Enhanced submit handler with email recognition
+  // Enhanced submit handler with professional error handling
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      alert('Please fill in all required fields correctly before submitting.');
+    if (!validateFormWithFeedback()) {
+      return;
+    }
+
+    if (!isOnline) {
+      showNotification('Please check your internet connection and try again.', 'error');
       return;
     }
 
     try {
+      showNotification('Submitting your response...', 'info');
+      
       const emailField = fields.find(f => f.type === 'EMAIL' || f.type === 'email');
       const email = emailField ? currentFormValues[emailField.id] : null;
 
-      // Add email to recognition if it's new
+      // Enhanced email recognition
       if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         const isAlreadyRecognized = recognizedEmails.some(e => e.email === email);
         if (!isAlreadyRecognized) {
           addEmail(email);
         } else {
-          // Update last used time for existing email
           const existingEmail = recognizedEmails.find(e => e.email === email);
           if (existingEmail) {
             switchToEmail(existingEmail);
@@ -258,40 +381,135 @@ export default function FormBuilder({
 
       const submissionData = {
         email: email || null,
-        responses: currentFormValues
+        responses: currentFormValues,
+        submittedAt: new Date().toISOString(),
+        userAgent: navigator.userAgent
       };
 
       console.log('Submitting form response:', submissionData);
       const response = await submitResponse(formData.id, submissionData);
       console.log('Form submitted successfully:', response.data);
       
+      showNotification('Your response has been successfully submitted!', 'success');
       setShowSuccessModal(true);
 
     } catch (error) {
       console.error('Error submitting form:', error);
       
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
       if (error.response?.status === 404) {
-        alert('Form not found. Please check if the form is still available.');
+        errorMessage = 'This form is no longer available. Please contact the form owner.';
       } else if (error.response?.status === 400) {
-        alert('Invalid form data. Please check your responses and try again.');
-      } else {
-        alert('Failed to submit form. Please check your connection and try again.');
+        errorMessage = 'Invalid form data. Please review your responses and try again.';
+      } else if (error.response?.status === 413) {
+        errorMessage = 'Submission too large. Please reduce file sizes or remove attachments.';
+      } else if (!isOnline) {
+        errorMessage = 'Connection lost during submission. Please check your internet connection.';
       }
+      
+      showNotification(errorMessage, 'error');
     }
   };
 
-  // Handle account switching
-  const handleEmailChange = (email) => {
-    // Update form values with the new email if there's an email field
-    const emailField = fields.find(f => f.type === 'EMAIL' || f.type === 'email');
-    if (emailField) {
-      handleFieldValueChange(emailField.id, email);
+  // Enhanced form saving with professional feedback
+  const saveForm = async () => {
+    if (!formData.title?.trim()) {
+      showNotification('Please enter a form title before saving.', 'warning');
+      return;
+    }
+
+    if (!isOnline) {
+      showNotification('Connection required to save. Changes will be saved once online.', 'warning');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveStatus(null);
+
+    try {
+      const formPayload = {
+        title: formData.title.trim(),
+        description: formData.description?.trim() || '',
+        headerImage: formData.headerImage,
+        accentColor: formData.accentColor,
+        backgroundColor: formData.backgroundColor || '#ffffff',
+        fields: fields,
+        settings: {
+          deviceView: deviceView,
+          collectEmails: formData.settings?.collectEmails || false,
+          language: formData.settings?.language || 'en'
+        },
+        lastModified: new Date().toISOString()
+      };
+
+      let response;
+      if (isFormSaved && formData.id) {
+        response = await updateForm(formData.id, formPayload);
+        showNotification('Form updated successfully!', 'success');
+      } else {
+        response = await createForm(formPayload);
+        if (response.data?.id) {
+          setFormData(prev => ({ ...prev, id: response.data.id }));
+        }
+        setIsFormSaved(true);
+        showNotification('Form created successfully!', 'success');
+      }
+
+      setSaveStatus('success');
+      console.log('Form saved successfully:', response.data);
+      
+    } catch (error) {
+      setSaveStatus('error');
+      console.error('Error saving form:', error);
+      
+      let errorMessage = 'Failed to save form. Please try again.';
+      
+      if (error.response?.status === 400) {
+        errorMessage = 'Invalid form data. Please check your fields.';
+      } else if (error.response?.status === 413) {
+        errorMessage = 'Form too large. Please reduce content size.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Permission denied. Please check your access rights.';
+      }
+      
+      showNotification(errorMessage, 'error');
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setSaveStatus(null), 3000);
     }
   };
 
+  // Enhanced handlers with notifications
+  const handleAddField = (type) => {
+    if (addField) {
+      if (clearTemplateState && templateFields) {
+        clearTemplateState();
+        showNotification('Template cleared. Added custom field.', 'info');
+      }
+      
+      addField(type);
+      showNotification(`${type.replace('_', ' ').toLowerCase()} field added successfully!`, 'success');
+    }
+    setShowFieldTypes(false);
+  };
+
+  const handleColorChange = (newColor) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      accentColor: newColor 
+    }));
+    
+    showNotification('Form color theme updated!', 'success');
+    
+    const currentActive = activeField;
+    setActiveField(null);
+    setTimeout(() => setActiveField(currentActive), 10);
+  };
+
+  // Enhanced clear form handler
   const handleFillAnother = () => {
     if (onFieldValueChange) {
-      // Clear all field values when using external state
       fields.forEach(field => {
         onFieldValueChange(field.id, '');
       });
@@ -300,6 +518,7 @@ export default function FormBuilder({
     }
     setFormErrors({});
     setShowSuccessModal(false);
+    showNotification('Form cleared and ready for new response.', 'success');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -314,88 +533,15 @@ export default function FormBuilder({
       setLocalFormValues({});
     }
     setFormErrors({});
+    showNotification('Returned to form builder.', 'info');
   };
 
-  const saveForm = async () => {
-    if (!formData.title.trim()) {
-      alert('Please enter a form title before saving.');
-      return;
-    }
-
-    setIsSaving(true);
-    setSaveStatus(null);
-
-    try {
-      const formPayload = {
-        title: formData.title,
-        description: formData.description,
-        headerImage: formData.headerImage,
-        accentColor: formData.accentColor,
-        fields: fields,
-        settings: {
-          deviceView: deviceView,
-        }
-      };
-
-      let response;
-      if (isFormSaved) {
-        response = await updateForm(formData.id, formPayload);
-      } else {
-        response = await createForm(formPayload);
-        if (response.data && response.data.id) {
-          setFormData(prev => ({ ...prev, id: response.data.id }));
-        }
-        setIsFormSaved(true);
-      }
-
-      setSaveStatus('success');
-      console.log('Form saved successfully:', response.data);
-      
-      setTimeout(() => setSaveStatus(null), 3000);
-    } catch (error) {
-      setSaveStatus('error');
-      console.error('Error saving form:', error);
-      
-      const errorMessage = error.response?.data?.message || 'Failed to save form. Please try again.';
-      alert(errorMessage);
-      
-      setTimeout(() => setSaveStatus(null), 3000);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleColorChange = (newColor) => {
-    console.log('Changing color from', formData.accentColor, 'to', newColor);
-    setFormData(prev => ({ 
-      ...prev, 
-      accentColor: newColor 
-    }));
-    
-    const currentActive = activeField;
-    setActiveField(null);
-    setTimeout(() => setActiveField(currentActive), 10);
-  };
-
+  // Rest of helper functions remain the same...
   const addFieldFromLibrary = (templateField) => {
     if (addField) {
-      // Use the external addField function if available
       addField(templateField.type);
-    } else {
-      // Fallback to local implementation
-      console.log('Adding field from library:', templateField);
+      showNotification('Field added from library!', 'success');
     }
-  };
-
-  const handleAddField = (type) => {
-    if (addField) {
-      // Clear template state when adding custom fields
-      if (clearTemplateState) {
-        clearTemplateState();
-      }
-      addField(type);
-    }
-    setShowFieldTypes(false);
   };
 
   const exportForm = () => {
@@ -412,6 +558,8 @@ export default function FormBuilder({
     a.download = `${formData.title.replace(/[^a-zA-Z0-9]/g, '-')}-form.json`;
     a.click();
     URL.revokeObjectURL(url);
+    
+    showNotification('Form exported successfully!', 'success');
   };
 
   const getDeviceClass = () => {
@@ -447,15 +595,27 @@ export default function FormBuilder({
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading template...</p>
+          <p className="mt-4 text-gray-600 font-medium">Loading template...</p>
+          <p className="text-sm text-gray-500 mt-2">Please wait while we prepare your form</p>
         </div>
       </div>
     );
   }
 
+  // Enhanced preview mode with validation indicators
   if (currentPreviewMode) {
+    const validation = validateForm(fields, currentFormValues);
+    
     return (
       <div className="min-h-screen bg-gray-50">
+        {/* Connection status indicator */}
+        {!isOnline && (
+          <div className="fixed top-4 left-4 z-40 bg-red-100 border border-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <WifiOff className="w-4 h-4" />
+            Offline Mode
+          </div>
+        )}
+        
         <div className="bg-white border-b shadow-sm sticky top-0 z-10">
           <div className="max-w-6xl mx-auto px-4 lg:px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -467,34 +627,30 @@ export default function FormBuilder({
                 <span className="font-medium text-sm lg:text-base">Exit Preview</span>
               </button>
               <div className="w-px h-6 bg-gray-300" />
-              <div className="hidden sm:flex items-center gap-2">
-                <button
-                  onClick={() => setDeviceView('desktop')}
-                  className={`p-2 rounded-lg transition-colors ${deviceView === 'desktop' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
-                >
-                  <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
-                </button>
-                <button
-                  onClick={() => setDeviceView('tablet')}
-                  className={`p-2 rounded-lg transition-colors ${deviceView === 'tablet' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
-                >
-                  <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
-                </button>
-                <button
-                  onClick={() => setDeviceView('mobile')}
-                  className={`p-2 rounded-lg transition-colors ${deviceView === 'mobile' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
-                >
-                  <Smartphone className="w-4 h-4 lg:w-5 lg:h-5" />
-                </button>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>{fields.length} field{fields.length !== 1 ? 's' : ''}</span>
+                {validation.hasErrors && (
+                  <span className="text-red-600 font-medium">
+                    • {Object.keys(validation.errors).length} error{Object.keys(validation.errors).length !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
             </div>
+            
             <button
               onClick={handleSubmit}
-              className="flex items-center gap-2 px-4 lg:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg text-sm lg:text-base"
-              style={{ backgroundColor: formData.accentColor }}
+              disabled={!isOnline || validation.hasErrors}
+              className={`flex items-center gap-2 px-4 lg:px-6 py-3 rounded-lg transition-colors font-semibold shadow-lg text-sm lg:text-base ${
+                !isOnline || validation.hasErrors
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              style={{ 
+                backgroundColor: !isOnline || validation.hasErrors ? undefined : formData.accentColor 
+              }}
             >
               <Send className="w-4 h-4 lg:w-5 lg:h-5" />
-              Submit Form
+              {!isOnline ? 'Connection Required' : validation.hasErrors ? 'Complete Required Fields' : 'Submit Form'}
             </button>
           </div>
         </div>
@@ -517,7 +673,12 @@ export default function FormBuilder({
                     onSwitchAccount={switchToEmail}
                     onAddNewAccount={addEmail}
                     onRemoveAccount={removeEmail}
-                    onEmailChange={handleEmailChange}
+                    onEmailChange={(email) => {
+                      const emailField = fields.find(f => f.type === 'EMAIL' || f.type === 'email');
+                      if (emailField) {
+                        handleFieldValueChange(emailField.id, email);
+                      }
+                    }}
                   />
                 )}
 
@@ -533,6 +694,7 @@ export default function FormBuilder({
                     accentColor={formData.accentColor}
                     previewMode={true}
                     formData={formData}
+                    formErrors={formErrors}
                   />
                 ))}
                 
@@ -558,6 +720,7 @@ export default function FormBuilder({
                             setLocalFormValues({});
                           }
                           setFormErrors({});
+                          showNotification('Form cleared successfully.', 'info');
                         }}
                         className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                       >
@@ -566,8 +729,13 @@ export default function FormBuilder({
                       <button
                         type="submit"
                         onClick={handleSubmit}
-                        className="px-8 py-3 text-white rounded-lg hover:opacity-90 transition-all font-semibold shadow-lg flex items-center gap-2"
-                        style={{ backgroundColor: formData.accentColor }}
+                        disabled={!isOnline || validation.hasErrors}
+                        className={`px-8 py-3 rounded-lg transition-all font-semibold shadow-lg flex items-center gap-2 ${
+                          !isOnline || validation.hasErrors
+                            ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                            : 'text-white hover:opacity-90'
+                        }`}
+                        style={{ backgroundColor: (!isOnline || validation.hasErrors) ? undefined : formData.accentColor }}
                       >
                         <Send className="w-5 h-5" />
                         Submit Form
@@ -580,18 +748,38 @@ export default function FormBuilder({
           </div>
         </div>
 
-        {/* Success Modal */}
-        <SuccessModal 
+        {/* Enhanced Success Modal */}
+        <ProfessionalSuccessModal 
           isVisible={showSuccessModal}
           onClose={handleCloseSuccess}
           onFillAnother={handleFillAnother}
           formTitle={formData.title}
         />
+        
+        {/* Validation Alert */}
+        <ProfessionalAlert
+          isVisible={validationAlert.show}
+          onClose={() => setValidationAlert({ show: false, data: {} })}
+          title={validationAlert.data.title}
+          message={validationAlert.data.message}
+          type={validationAlert.data.type}
+          onConfirm={() => {
+            // Scroll to first error
+            const firstErrorField = Object.keys(formErrors)[0];
+            if (firstErrorField) {
+              const element = document.querySelector(`[data-field-id="${firstErrorField}"]`);
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }
+          }}
+          showCancel={false}
+        />
       </div>
     );
   }
 
-  // Builder interface
+  // Enhanced Builder interface with improved UX
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row overflow-hidden">
       {/* Mobile Header */}
@@ -616,14 +804,14 @@ export default function FormBuilder({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowQuestionLibrary(true)}
-                className="p-2 bg-purple-600 text-white rounded-lg"
+                className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                 title="Question Library"
               >
                 <List className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setShowFieldTypes(!showFieldTypes)}
-                className="p-2 bg-blue-600 text-white rounded-lg"
+                className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <PlusCircle className="w-5 h-5" />
               </button>
@@ -668,7 +856,10 @@ export default function FormBuilder({
               <h3 className="text-sm font-semibold text-gray-700">Form Fields ({fields.length})</h3>
               {templateFields && (
                 <button
-                  onClick={clearTemplateState}
+                  onClick={() => {
+                    clearTemplateState();
+                    showNotification('Template cleared successfully.', 'info');
+                  }}
                   className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
                 >
                   Clear Template
@@ -709,14 +900,24 @@ export default function FormBuilder({
                           <Settings className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => duplicateField && duplicateField(field.id)}
+                          onClick={() => {
+                            if (duplicateField) {
+                              duplicateField(field.id);
+                              showNotification('Field duplicated successfully!', 'success');
+                            }
+                          }}
                           className="p-2 text-gray-400 hover:text-green-600 transition-colors"
                           title="Duplicate"
                         >
-                          <FileText className="w-4 h-4" />
+                          <Copy className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => deleteField && deleteField(field.id)}
+                          onClick={() => {
+                            if (deleteField) {
+                              deleteField(field.id);
+                              showNotification('Field deleted successfully.', 'info');
+                            }
+                          }}
                           className="p-2 text-gray-400 hover:text-red-600 transition-colors"
                           title="Delete"
                         >
@@ -752,11 +953,11 @@ export default function FormBuilder({
         </div>
       </div>
 
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar - Enhanced */}
       <div className="hidden lg:flex w-80 bg-white border-r shadow-lg flex-col flex-shrink-0">
         <div className="p-6 border-b">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Form Builder</h1>
-          <p className="text-sm text-gray-600">Create beautiful, interactive forms</p>
+          <p className="text-sm text-gray-600">Create beautiful, interactive forms with enhanced validation</p>
         </div>
 
         <div className="p-4 border-b">
@@ -807,12 +1008,16 @@ export default function FormBuilder({
           )}
         </div>
 
+        {/* Enhanced fields list */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Form Fields</h3>
             {templateFields && clearTemplateState && (
               <button
-                onClick={clearTemplateState}
+                onClick={() => {
+                  clearTemplateState();
+                  showNotification('Template cleared successfully.', 'info');
+                }}
                 className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
               >
                 Clear Template
@@ -853,21 +1058,27 @@ export default function FormBuilder({
                           {fieldType?.label}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            duplicateField && duplicateField(field.id);
+                            if (duplicateField) {
+                              duplicateField(field.id);
+                              showNotification('Field duplicated!', 'success');
+                            }
                           }}
                           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                           title="Duplicate"
                         >
-                          <FileText className="w-4 h-4" />
+                          <Copy className="w-4 h-4" />
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            deleteField && deleteField(field.id);
+                            if (deleteField) {
+                              deleteField(field.id);
+                              showNotification('Field deleted.', 'info');
+                            }
                           }}
                           className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                           title="Delete"
@@ -883,6 +1094,7 @@ export default function FormBuilder({
           )}
         </div>
 
+        {/* Enhanced form settings */}
         <div className="p-4 border-t">
           <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Form Settings</h3>
           <div className="space-y-3">
@@ -918,31 +1130,39 @@ export default function FormBuilder({
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area - Enhanced */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         <div className="bg-white border-b shadow-sm">
           <div className="px-4 lg:px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-2 lg:gap-4">
               <h2 className="text-lg lg:text-xl font-bold text-gray-800 truncate">{formData.title}</h2>
-              <div className="lg:flex items-center gap-2">
-                <button
-                  onClick={() => setDeviceView('desktop')}
-                  className={`p-2 rounded-lg transition-colors ${deviceView === 'desktop' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
-                >
-                  <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
-                </button>
-                <button
-                  onClick={() => setDeviceView('tablet')}
-                  className={`hidden sm:block p-2 rounded-lg transition-colors ${deviceView === 'tablet' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
-                >
-                  <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
-                </button>
-                <button
-                  onClick={() => setDeviceView('mobile')}
-                  className={`p-2 rounded-lg transition-colors ${deviceView === 'mobile' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
-                >
-                  <Smartphone className="w-4 h-4 lg:w-5 lg:h-5" />
-                </button>
+              <div className="flex items-center gap-2">
+                {!isOnline && (
+                  <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
+                    <WifiOff className="w-3 h-3" />
+                    Offline
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setDeviceView('desktop')}
+                    className={`p-2 rounded-lg transition-colors ${deviceView === 'desktop' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                  >
+                    <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
+                  </button>
+                  <button
+                    onClick={() => setDeviceView('tablet')}
+                    className={`hidden sm:block p-2 rounded-lg transition-colors ${deviceView === 'tablet' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                  >
+                    <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
+                  </button>
+                  <button
+                    onClick={() => setDeviceView('mobile')}
+                    className={`p-2 rounded-lg transition-colors ${deviceView === 'mobile' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                  >
+                    <Smartphone className="w-4 h-4 lg:w-5 lg:h-5" />
+                  </button>
+                </div>
               </div>
             </div>
             
@@ -1007,6 +1227,7 @@ export default function FormBuilder({
           </div>
         </div>
 
+        {/* Enhanced main content area */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 min-w-0">
           <div className={getDeviceClass()}>
             <div className="bg-white rounded-xl lg:rounded-2xl shadow-xl lg:shadow-2xl overflow-hidden w-full">
@@ -1047,7 +1268,10 @@ export default function FormBuilder({
                       </div>
                       {clearTemplateState && (
                         <button
-                          onClick={clearTemplateState}
+                          onClick={() => {
+                            clearTemplateState();
+                            showNotification('Template cleared successfully.', 'info');
+                          }}
                           className="text-xs text-purple-600 hover:text-purple-800 underline"
                         >
                           Clear Template
@@ -1058,18 +1282,20 @@ export default function FormBuilder({
                 )}
 
                 {fields.map(field => (
-                  <FieldRenderer
-                    key={field.id}
-                    field={field}
-                    activeField={activeField}
-                    setActiveField={setActiveField}
-                    updateField={updateField}
-                    formValues={currentFormValues}
-                    onFieldValueChange={handleFieldValueChange}
-                    accentColor={formData.accentColor}
-                    previewMode={false}
-                    formData={formData}
-                  />
+                  <div key={field.id} data-field-id={field.id}>
+                    <FieldRenderer
+                      field={field}
+                      activeField={activeField}
+                      setActiveField={setActiveField}
+                      updateField={updateField}
+                      formValues={currentFormValues}
+                      onFieldValueChange={handleFieldValueChange}
+                      accentColor={formData.accentColor}
+                      previewMode={false}
+                      formData={formData}
+                      formErrors={formErrors}
+                    />
+                  </div>
                 ))}
 
                 {fields.length === 0 && (
@@ -1115,6 +1341,7 @@ export default function FormBuilder({
         </div>
       </div>
 
+      {/* Enhanced modals and components */}
       <QuestionLibrary 
         onAddQuestion={addFieldFromLibrary}
         showLibrary={showQuestionLibrary}
@@ -1129,6 +1356,48 @@ export default function FormBuilder({
         formId={formData.id}       
         formTitle={formData.title} 
       />
+
+      {/* Toast Notification */}
+      {notification && (
+        <ToastNotification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
+      )}
+
+      {/* CSS for animations */}
+      <style jsx>{`
+        .animate-scale-in {
+          animation: scaleIn 0.3s ease-out forwards;
+        }
+        
+        .animate-slide-in {
+          animation: slideInRight 0.3s ease-out forwards;
+        }
+        
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
