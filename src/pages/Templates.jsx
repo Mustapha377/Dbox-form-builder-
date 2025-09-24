@@ -5,8 +5,79 @@ import {
   FileText, Users, Gift, MapPin, Phone, Globe, Shield, Award,
   Crown, Check, X, ChevronDown, Grid, List
 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 
-// Complete template data including the missing parts
+// Enhanced field normalization with better ID validation
+const normalizeTemplateFields = (templateFields) => {
+  return templateFields.map((field, index) => {
+    // Enhanced ID generation and validation
+    const generateValidId = () => {
+      const baseId = `template_field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      return uuidv4(); // Always use proper UUIDs
+    };
+
+    // Validate existing ID
+    const isValidId = (id) => {
+      if (!id || typeof id !== 'string' || id.trim() === '') return false;
+      if (['name', 'undefined', 'null', 'message', 'email'].includes(id.toLowerCase())) return false;
+      if (id.length < 10) return false;
+      return true;
+    };
+
+    // Create normalized field with proper ID
+    const normalizedField = {
+      ...field,
+      id: isValidId(field.id) ? field.id : generateValidId(),
+      index: index + 1,
+      isTemplateField: true,
+      formId: null,
+      // Ensure required validations are properly structured
+      validations: field.required ? 
+        (field.validations || []).concat([{ type: 'required' }]).filter((v, i, arr) => 
+          arr.findIndex(item => item.type === v.type) === i
+        ) : 
+        field.validations || [],
+      // Normalize options with proper IDs
+      options: field.options ? field.options.map((option, optIndex) => {
+        if (typeof option === 'string') {
+          return {
+            id: uuidv4(),
+            value: option,
+            score: 0
+          };
+        } else if (option && typeof option === 'object') {
+          return {
+            id: option.id || uuidv4(),
+            value: option.value || option.text || option.label || `Option ${optIndex + 1}`,
+            score: option.score || 0,
+            image: option.image || null
+          };
+        }
+        return {
+          id: uuidv4(),
+          value: `Option ${optIndex + 1}`,
+          score: 0
+        };
+      }) : null
+    };
+    
+    // Remove problematic properties
+    delete normalizedField.name;
+    
+    console.log('Normalized template field:', {
+      originalId: field.id,
+      newId: normalizedField.id,
+      question: normalizedField.question,
+      type: normalizedField.type,
+      hasOptions: !!normalizedField.options,
+      optionsCount: normalizedField.options?.length || 0
+    });
+    
+    return normalizedField;
+  });
+};
+
+// Complete template data with all templates included
 const completeTemplates = [
   {
     id: 1,
@@ -25,22 +96,18 @@ const completeTemplates = [
       backgroundColor: '#fdf2f8',
       fields: [
         {
-          id: 'section_1',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Guest Information',
           description: 'Please tell us about your party'
         },
         {
-          id: 'guest_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name(s) of Guest(s)',
           description: 'Please include all guests in your party',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'attendance',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'Will you be attending our wedding?',
           required: true,
           options: [
@@ -48,26 +115,21 @@ const completeTemplates = [
             'Ceremony only',
             'Reception only',
             'Sorry, we cannot attend'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         },
         {
-          id: 'guest_count',
-          type: 'dropdown',
+          type: 'DROPDOWN',
           question: 'Number of guests attending',
           required: true,
-          options: ['1 guest', '2 guests', '3 guests', '4 guests'],
-          validations: [{ type: 'required' }]
+          options: ['1 guest', '2 guests', '3 guests', '4 guests']
         },
         {
-          id: 'section_2',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Dining Preferences',
           description: 'Help us plan the perfect meal'
         },
         {
-          id: 'meal_preferences',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Dietary Requirements & Preferences',
           options: [
             'Vegetarian',
@@ -79,16 +141,13 @@ const completeTemplates = [
           ]
         },
         {
-          id: 'contact_email',
-          type: 'email',
+          type: 'EMAIL',
           question: 'Email Address',
           required: true,
-          description: 'For any last-minute updates',
-          validations: [{ type: 'required' }, { type: 'email' }]
+          description: 'For any last-minute updates'
         },
         {
-          id: 'special_message',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Special Message for the Happy Couple',
           description: 'Share your love, wishes, or favorite memories!'
         }
@@ -112,67 +171,51 @@ const completeTemplates = [
       backgroundColor: '#f8fafc',
       fields: [
         {
-          id: 'section_personal',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Personal Information'
         },
         {
-          id: 'full_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'email',
-          type: 'email',
+          type: 'EMAIL',
           question: 'Email Address',
-          required: true,
-          validations: [{ type: 'required' }, { type: 'email' }]
+          required: true
         },
         {
-          id: 'phone',
-          type: 'phone',
+          type: 'PHONE',
           question: 'Phone Number',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'location',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Current Location (City, State)',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'portfolio_url',
-          type: 'url',
+          type: 'URL',
           question: 'Portfolio/Website URL',
           description: 'Link to your portfolio, GitHub, or personal website'
         },
         {
-          id: 'section_experience',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Professional Experience'
         },
         {
-          id: 'current_role',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Current Job Title',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'experience_years',
-          type: 'dropdown',
+          type: 'DROPDOWN',
           question: 'Years of Professional Experience',
           required: true,
-          options: ['0-1 years', '2-3 years', '4-6 years', '7-10 years', '10+ years'],
-          validations: [{ type: 'required' }]
+          options: ['0-1 years', '2-3 years', '4-6 years', '7-10 years', '10+ years']
         },
         {
-          id: 'technical_skills',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Technical Skills',
           description: 'Select all that apply to your experience level',
           options: [
@@ -189,19 +232,15 @@ const completeTemplates = [
           ]
         },
         {
-          id: 'start_date',
-          type: 'date',
+          type: 'DATE',
           question: 'Earliest Start Date',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'why_join',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Why do you want to join our team?',
           required: true,
-          description: 'Tell us what excites you about this opportunity',
-          validations: [{ type: 'required' }]
+          description: 'Tell us what excites you about this opportunity'
         }
       ]
     }
@@ -223,47 +262,36 @@ const completeTemplates = [
       backgroundColor: '#f0fdf4',
       fields: [
         {
-          id: 'section_attendee',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Attendee Information'
         },
         {
-          id: 'full_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'email',
-          type: 'email',
+          type: 'EMAIL',
           question: 'Email Address',
           required: true,
-          description: 'Ticket and conference updates will be sent here',
-          validations: [{ type: 'required' }, { type: 'email' }]
+          description: 'Ticket and conference updates will be sent here'
         },
         {
-          id: 'company',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Company/Organization',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'job_title',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Job Title',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'section_tickets',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Ticket Selection'
         },
         {
-          id: 'ticket_type',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'Select Your Ticket Type',
           required: true,
           options: [
@@ -271,12 +299,10 @@ const completeTemplates = [
             'Regular Admission - $399',
             'VIP Pass - $699 (Includes networking dinner)',
             'Student Discount - $149 (ID required)'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         },
         {
-          id: 'dietary_requirements',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Dietary Requirements',
           description: 'For catering purposes',
           options: [
@@ -289,8 +315,7 @@ const completeTemplates = [
           ]
         },
         {
-          id: 'interests',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Topics of Interest',
           description: 'Help us customize your experience',
           options: [
@@ -324,26 +349,21 @@ const completeTemplates = [
       backgroundColor: '#faf5ff',
       fields: [
         {
-          id: 'section_about',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'About You'
         },
         {
-          id: 'customer_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Name (Optional)'
         },
         {
-          id: 'email',
-          type: 'email',
+          type: 'EMAIL',
           question: 'Email Address',
           required: true,
-          description: 'For follow-up if needed',
-          validations: [{ type: 'required' }, { type: 'email' }]
+          description: 'For follow-up if needed'
         },
         {
-          id: 'customer_type',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'What best describes you?',
           required: true,
           options: [
@@ -351,24 +371,23 @@ const completeTemplates = [
             'Regular customer (3-12 months)',
             'Long-term customer (1+ years)',
             'Business customer'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         },
         {
-          id: 'section_experience',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Your Experience'
         },
         {
-          id: 'overall_satisfaction',
-          type: 'linear-scale',
+          type: 'LINEAR_SCALE',
           question: 'How satisfied are you with our service overall?',
           required: true,
-          validations: [{ type: 'required' }]
+          scaleMin: 1,
+          scaleMax: 5,
+          scaleMinLabel: 'Very Dissatisfied',
+          scaleMaxLabel: 'Very Satisfied'
         },
         {
-          id: 'features_used',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Which features have you used?',
           options: [
             'Dashboard',
@@ -380,24 +399,24 @@ const completeTemplates = [
           ]
         },
         {
-          id: 'most_valuable',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'What do you find most valuable about our service?',
           description: 'Tell us what you love most'
         },
         {
-          id: 'improvements',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'What could we improve?',
           description: 'Your suggestions help us get better'
         },
         {
-          id: 'recommend_rating',
-          type: 'linear-scale',
+          type: 'LINEAR_SCALE',
           question: 'How likely are you to recommend us to a friend?',
           required: true,
           description: 'This helps us measure customer satisfaction',
-          validations: [{ type: 'required' }]
+          scaleMin: 0,
+          scaleMax: 10,
+          scaleMinLabel: 'Not Likely',
+          scaleMaxLabel: 'Very Likely'
         }
       ]
     }
@@ -419,35 +438,27 @@ const completeTemplates = [
       backgroundColor: '#ffffff',
       fields: [
         {
-          id: 'name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'email',
-          type: 'email',
+          type: 'EMAIL',
           question: 'Email Address',
-          required: true,
-          validations: [{ type: 'required' }, { type: 'email' }]
+          required: true
         },
         {
-          id: 'phone',
-          type: 'phone',
+          type: 'PHONE',
           question: 'Phone Number (Optional)',
           description: 'We\'ll only call if needed'
         },
         {
-          id: 'subject',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Subject',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'department',
-          type: 'dropdown',
+          type: 'DROPDOWN',
           question: 'Department',
           options: [
             'General Inquiry',
@@ -458,12 +469,10 @@ const completeTemplates = [
           ]
         },
         {
-          id: 'message',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Message',
           required: true,
-          description: 'Please provide as much detail as possible',
-          validations: [{ type: 'required' }]
+          description: 'Please provide as much detail as possible'
         }
       ]
     }
@@ -485,39 +494,30 @@ const completeTemplates = [
       backgroundColor: '#fff7ed',
       fields: [
         {
-          id: 'section_customer',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Customer Information'
         },
         {
-          id: 'full_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'email',
-          type: 'email',
+          type: 'EMAIL',
           question: 'Email Address',
-          required: true,
-          validations: [{ type: 'required' }, { type: 'email' }]
+          required: true
         },
         {
-          id: 'phone',
-          type: 'phone',
+          type: 'PHONE',
           question: 'Phone Number',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'section_products',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Product Selection'
         },
         {
-          id: 'products',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Select Products',
           required: true,
           options: [
@@ -526,26 +526,20 @@ const completeTemplates = [
             'Enterprise Package - $399',
             'Add-on Services - $50',
             'Priority Support - $29'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         },
         {
-          id: 'quantity',
-          type: 'number',
+          type: 'NUMBER',
           question: 'Total Quantity',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'delivery_date',
-          type: 'date',
+          type: 'DATE',
           question: 'Preferred Delivery Date',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'special_instructions',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Special Instructions',
           description: 'Any specific requirements or notes for your order'
         }
@@ -569,73 +563,56 @@ const completeTemplates = [
       backgroundColor: '#f0fdfa',
       fields: [
         {
-          id: 'section_personal',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Personal Information'
         },
         {
-          id: 'full_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'date_of_birth',
-          type: 'date',
+          type: 'DATE',
           question: 'Date of Birth',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'gender',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'Gender',
           required: true,
-          options: ['Male', 'Female', 'Non-binary', 'Prefer not to say'],
-          validations: [{ type: 'required' }]
+          options: ['Male', 'Female', 'Non-binary', 'Prefer not to say']
         },
         {
-          id: 'contact_phone',
-          type: 'phone',
+          type: 'PHONE',
           question: 'Phone Number',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'emergency_contact',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Emergency Contact Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'emergency_phone',
-          type: 'phone',
+          type: 'PHONE',
           question: 'Emergency Contact Phone',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'section_medical',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Medical History'
         },
         {
-          id: 'current_medications',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Current Medications',
           description: 'List all medications, supplements, and dosages'
         },
         {
-          id: 'allergies',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Known Allergies',
           description: 'Include drug, food, and environmental allergies'
         },
         {
-          id: 'medical_conditions',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Current or Past Medical Conditions',
           options: [
             'Diabetes',
@@ -651,12 +628,10 @@ const completeTemplates = [
           ]
         },
         {
-          id: 'reason_for_visit',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Reason for Today\'s Visit',
           required: true,
-          description: 'Describe your symptoms or concerns',
-          validations: [{ type: 'required' }]
+          description: 'Describe your symptoms or concerns'
         }
       ]
     }
@@ -678,34 +653,26 @@ const completeTemplates = [
       backgroundColor: '#fff7ed',
       fields: [
         {
-          id: 'section_student',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Student Information'
         },
         {
-          id: 'student_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'student_id',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Student ID Number',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'email',
-          type: 'email',
+          type: 'EMAIL',
           question: 'Student Email Address',
-          required: true,
-          validations: [{ type: 'required' }, { type: 'email' }]
+          required: true
         },
         {
-          id: 'program',
-          type: 'dropdown',
+          type: 'DROPDOWN',
           question: 'Academic Program',
           required: true,
           options: [
@@ -715,25 +682,20 @@ const completeTemplates = [
             'Liberal Arts',
             'Sciences',
             'Mathematics'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         },
         {
-          id: 'year_level',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'Academic Year',
           required: true,
-          options: ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate'],
-          validations: [{ type: 'required' }]
+          options: ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate']
         },
         {
-          id: 'section_courses',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Course Selection'
         },
         {
-          id: 'courses',
-          type: 'checkboxes',
+          type: 'CHECKBOXES',
           question: 'Select Courses (Maximum 6)',
           required: true,
           options: [
@@ -745,12 +707,10 @@ const completeTemplates = [
             'MATH 201 - Statistics',
             'ENG 101 - English Composition',
             'HIST 101 - World History'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         },
         {
-          id: 'schedule_preference',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'Schedule Preference',
           required: true,
           options: [
@@ -758,12 +718,10 @@ const completeTemplates = [
             'Afternoon classes (12:00 PM - 5:00 PM)',
             'Evening classes (5:00 PM - 9:00 PM)',
             'Mixed schedule'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         },
         {
-          id: 'payment_method',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'Payment Method',
           required: true,
           options: [
@@ -771,13 +729,11 @@ const completeTemplates = [
             'Installment plan (3 payments)',
             'Financial aid',
             'Scholarship'
-          ],
-          validations: [{ type: 'required' }]
+          ]
         }
       ]
     }
   },
-  // Additional templates
   {
     id: 9,
     name: 'Employee Onboarding',
@@ -795,45 +751,34 @@ const completeTemplates = [
       backgroundColor: '#f0f9ff',
       fields: [
         {
-          id: 'personal_info',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Personal Information'
         },
         {
-          id: 'full_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Legal Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'start_date',
-          type: 'date',
+          type: 'DATE',
           question: 'Start Date',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'department',
-          type: 'dropdown',
+          type: 'DROPDOWN',
           question: 'Department',
           required: true,
-          options: ['Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations'],
-          validations: [{ type: 'required' }]
+          options: ['Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations']
         },
         {
-          id: 'emergency_contact_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Emergency Contact Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'emergency_contact_phone',
-          type: 'phone',
+          type: 'PHONE',
           question: 'Emergency Contact Phone',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         }
       ]
     }
@@ -855,38 +800,29 @@ const completeTemplates = [
       backgroundColor: '#f0fdf4',
       fields: [
         {
-          id: 'applicant_info',
-          type: 'section-header',
+          type: 'SECTION_HEADER',
           question: 'Applicant Information'
         },
         {
-          id: 'full_name',
-          type: 'short-answer',
+          type: 'SHORT_ANSWER',
           question: 'Full Name',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'current_address',
-          type: 'paragraph',
+          type: 'PARAGRAPH',
           question: 'Current Address',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'monthly_income',
-          type: 'number',
+          type: 'NUMBER',
           question: 'Monthly Income',
-          required: true,
-          validations: [{ type: 'required' }]
+          required: true
         },
         {
-          id: 'employment_status',
-          type: 'multiple-choice',
+          type: 'MULTIPLE_CHOICE',
           question: 'Employment Status',
           required: true,
-          options: ['Full-time', 'Part-time', 'Self-employed', 'Unemployed', 'Retired'],
-          validations: [{ type: 'required' }]
+          options: ['Full-time', 'Part-time', 'Self-employed', 'Unemployed', 'Retired']
         }
       ]
     }
@@ -941,15 +877,50 @@ const Templates = ({ setCurrentView, onUseTemplate, onAddTemplateFields, existin
     return filtered;
   }, [searchQuery, selectedCategory, sortBy]);
 
+  // Enhanced template usage handler with better error handling
   const handleUseTemplate = (template) => {
     console.log('Using template:', template.name);
-    onUseTemplate(template.formData);
-    setCurrentView('builder');
+    
+    try {
+      // Normalize fields before passing them
+      const normalizedFormData = {
+        ...template.formData,
+        fields: normalizeTemplateFields(template.formData.fields)
+      };
+      
+      console.log('Normalized template data:', {
+        title: normalizedFormData.title,
+        fieldCount: normalizedFormData.fields.length,
+        fields: normalizedFormData.fields.map(f => ({
+          id: f.id,
+          type: f.type,
+          question: f.question
+        }))
+      });
+      
+      onUseTemplate(normalizedFormData);
+      setCurrentView('builder');
+    } catch (error) {
+      console.error('Error using template:', error);
+      alert('There was an error loading the template. Please try again.');
+    }
   };
 
+  // Enhanced add fields handler
   const handleAddFields = (template) => {
     console.log('Adding template fields:', template.name);
-    onAddTemplateFields(template.formData.fields);
+    
+    try {
+      // Normalize fields before adding them
+      const normalizedFields = normalizeTemplateFields(template.formData.fields);
+      
+      console.log('Adding normalized fields:', normalizedFields.length);
+      
+      onAddTemplateFields(normalizedFields);
+    } catch (error) {
+      console.error('Error adding template fields:', error);
+      alert('There was an error adding the template fields. Please try again.');
+    }
   };
 
   const TemplateCard = ({ template }) => {
@@ -1083,7 +1054,7 @@ const Templates = ({ setCurrentView, onUseTemplate, onAddTemplateFields, existin
               <h4 className="font-semibold text-gray-900">Form Fields Preview:</h4>
               {template.formData.fields.map((field, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4">
-                  {field.type === 'section-header' ? (
+                  {field.type === 'SECTION_HEADER' ? (
                     <div>
                       <h5 className="text-lg font-semibold text-gray-900">{field.question}</h5>
                       {field.description && (
@@ -1100,7 +1071,7 @@ const Templates = ({ setCurrentView, onUseTemplate, onAddTemplateFields, existin
                         <p className="text-xs text-gray-600 mb-2">{field.description}</p>
                       )}
                       <div className="text-xs text-gray-500 uppercase tracking-wide">
-                        {field.type.replace('-', ' ')} Field
+                        {field.type.replace('_', ' ')} Field
                       </div>
                       {field.options && (
                         <div className="mt-2">

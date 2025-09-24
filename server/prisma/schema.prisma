@@ -65,6 +65,11 @@ model Field {
   order       Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  scaleMin    Int?     @default(1)
+  scaleMax    Int?     @default(5)
+  scaleMinLabel String?
+  scaleMaxLabel String?
+
   
   // Relationships
   form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)

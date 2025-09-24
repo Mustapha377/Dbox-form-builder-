@@ -90,6 +90,94 @@ const fetchFields = async (formId) => {
     throw error;
   }
 };
+//utility functuon to sanitize field data 
+
+const sanitizeFieldData = (fieldData) => {
+  if (!fieldData || typeof fieldData !== 'object') {
+    console.warn('Invalid field data provided to sanitizeFieldData:', fieldData);
+    return {};
+  }
+
+  console.log('Sanitizing field data:', fieldData);
+
+  // Start with a clean object, only including valid properties
+  const sanitized = {};
+
+  // Required fields - always include if present
+  if (fieldData.id !== undefined && fieldData.id !== null && fieldData.id !== '') {
+    sanitized.id = fieldData.id;
+  }
+  
+  if (fieldData.formId !== undefined && fieldData.formId !== null) {
+    sanitized.formId = typeof fieldData.formId === 'number' ? fieldData.formId : parseInt(fieldData.formId, 10);
+  }
+  
+  if (fieldData.type) {
+    sanitized.type = fieldData.type.toString().toUpperCase().replace('-', '_');
+  }
+
+  // Optional string fields
+  ['question', 'description', 'placeholder', 'defaultValue'].forEach(field => {
+    if (fieldData[field] && typeof fieldData[field] === 'string') {
+      sanitized[field] = fieldData[field].trim();
+    }
+  });
+
+  // Boolean fields
+  ['required'].forEach(field => {
+    if (typeof fieldData[field] === 'boolean') {
+      sanitized[field] = fieldData[field];
+    }
+  });
+
+  // Numeric fields
+  ['index', 'amount', 'points', 'scaleMin', 'scaleMax', 'maxFileSize'].forEach(field => {
+    if (fieldData[field] !== undefined && fieldData[field] !== null && fieldData[field] !== '') {
+      const numValue = typeof fieldData[field] === 'number' ? fieldData[field] : parseFloat(fieldData[field]);
+      if (!isNaN(numValue)) {
+        sanitized[field] = numValue;
+      }
+    }
+  });
+
+  // Handle options array properly
+  if (fieldData.options && Array.isArray(fieldData.options)) {
+    sanitized.options = fieldData.options.map((option, index) => {
+      if (typeof option === 'string') {
+        return { 
+          id: `option_${Date.now()}_${index}`,
+          value: option, 
+          score: 0 
+        };
+      }
+      if (option && typeof option === 'object') {
+        return {
+          id: option.id || `option_${Date.now()}_${index}`,
+          value: option.value || '',
+          score: typeof option.score === 'number' ? option.score : 0,
+          ...(option.image && { image: option.image })
+        };
+      }
+      return { 
+        id: `option_${Date.now()}_${index}`,
+        value: 'Option', 
+        score: 0 
+      };
+    });
+  }
+
+  // Handle validations array
+  if (fieldData.validations && Array.isArray(fieldData.validations)) {
+    const validValidations = fieldData.validations.filter(v => v && v.type);
+    if (validValidations.length > 0) {
+      sanitized.validations = validValidations;
+    }
+  }
+
+  console.log('Sanitized result:', sanitized);
+  return sanitized;
+};
+
 
 const ProtectedRoute = ({ children, user, userLoading, userError }) => {
   const token = localStorage.getItem('token');
@@ -148,6 +236,7 @@ const DboxSystem = () => {
   const [formValues, setFormValues] = useState({});
   const [isCreatingForm, setIsCreatingForm] = useState(false); 
   const queryClient = useQueryClient();
+  const [isResetting, setIsResetting] = useState(false);
   const [formData, setFormData] = useState({
     id: null,
     title: 'Untitled Form',
@@ -184,6 +273,8 @@ const DboxSystem = () => {
   const [previewMode, setPreviewMode] = useState('desktop');
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [templateFields, setTemplateFields] = useState(null);
+  const [isAddingField, setIsAddingField] = useState(false);
+
 
 const fieldTypes = [
   { type: 'SHORT_ANSWER', label: 'Short Answer', icon: Type, category: 'text', description: 'Single line text' },
@@ -207,10 +298,10 @@ const fieldTypes = [
 
 
   const languages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-    { code: 'fr', name: 'French', flag: '🇫🇷' },
-    { code: 'de', name: 'German', flag: '🇩🇪' }
+    { code: 'en', name: 'English', flag: 'Ã°Å¸â€¡ÂºÃ°Å¸â€¡Â¸' },
+    { code: 'es', name: 'Spanish', flag: 'Ã°Å¸â€¡ÂªÃ°Å¸â€¡Â¸' },
+    { code: 'fr', name: 'French', flag: 'Ã°Å¸â€¡Â«Ã°Å¸â€¡Â·' },
+    { code: 'de', name: 'German', flag: 'Ã°Å¸â€¡Â©Ã°Å¸â€¡Âª' }
   ];
 
   const { data: userData, isLoading: userLoading, error: userError } = useQuery({
@@ -267,22 +358,190 @@ const fieldTypes = [
     }
   });
 
+  const sanitizeFieldForAPI = (fieldData) => {
+  if (!fieldData || typeof fieldData !== 'object') {
+    console.warn('Invalid field data provided to sanitizeFieldForAPI:', fieldData);
+    return {};
+  }
+
+  console.log('Sanitizing field data for API:', fieldData);
+
+  // Start with a clean object, only including API-compatible properties
+  const sanitized = {};
+
+  // Required fields
+  if (fieldData.formId !== undefined && fieldData.formId !== null) {
+    // Ensure formId is always an integer
+    const formIdNum = parseInt(fieldData.formId, 10);
+    if (!isNaN(formIdNum)) {
+      sanitized.formId = formIdNum;
+    } else {
+      console.error('Invalid formId for API:', fieldData.formId);
+      throw new Error('Invalid formId provided');
+    }
+  }
+  
+  if (fieldData.type && typeof fieldData.type === 'string') {
+    sanitized.type = fieldData.type.toString().toUpperCase().replace('-', '_');
+  }
+
+  // Optional string fields with validation
+  ['question', 'description', 'placeholder', 'defaultValue'].forEach(field => {
+    if (fieldData[field] && typeof fieldData[field] === 'string') {
+      const trimmed = fieldData[field].trim();
+      if (trimmed.length > 0) {
+        sanitized[field] = trimmed;
+      }
+    }
+  });
+
+  // Boolean fields
+  ['required'].forEach(field => {
+    if (typeof fieldData[field] === 'boolean') {
+      sanitized[field] = fieldData[field];
+    }
+  });
+
+  // Numeric fields with validation
+  ['index', 'amount', 'points', 'scaleMin', 'scaleMax', 'maxFileSize'].forEach(field => {
+    if (fieldData[field] !== undefined && fieldData[field] !== null && fieldData[field] !== '') {
+      const numValue = typeof fieldData[field] === 'number' ? fieldData[field] : parseFloat(fieldData[field]);
+      if (!isNaN(numValue) && isFinite(numValue)) {
+        sanitized[field] = numValue;
+      }
+    }
+  });
+
+  // Handle options array with enhanced validation
+  if (fieldData.options && Array.isArray(fieldData.options)) {
+    sanitized.options = fieldData.options
+      .filter(option => option !== null && option !== undefined)
+      .map((option, index) => {
+        if (typeof option === 'string') {
+          return { 
+            value: option.trim() || `Option ${index + 1}`, 
+            score: 0 
+          };
+        }
+        if (option && typeof option === 'object') {
+          return {
+            value: (option.value && option.value.toString().trim()) || `Option ${index + 1}`,
+            score: typeof option.score === 'number' ? option.score : 0,
+            ...(option.image && typeof option.image === 'string' && { image: option.image.trim() })
+          };
+        }
+        return { 
+          value: `Option ${index + 1}`, 
+          score: 0 
+        };
+      })
+      .filter(option => option.value && option.value.length > 0);
+    
+    // Ensure we have at least one option for choice fields
+    if (['MULTIPLE_CHOICE', 'CHECKBOXES', 'DROPDOWN'].includes(sanitized.type) && 
+        sanitized.options.length === 0) {
+      sanitized.options = [
+        { value: 'Option 1', score: 0 },
+        { value: 'Option 2', score: 0 }
+      ];
+    }
+  }
+
+  // Handle validations array
+  if (fieldData.validations && Array.isArray(fieldData.validations)) {
+    const validValidations = fieldData.validations
+      .filter(v => v && v.type && typeof v.type === 'string');
+    if (validValidations.length > 0) {
+      sanitized.validations = validValidations;
+    }
+  }
+
+  // Add required validation if field is marked as required
+  if (sanitized.required && (!sanitized.validations || !sanitized.validations.some(v => v.type === 'required'))) {
+    sanitized.validations = [...(sanitized.validations || []), { type: 'required' }];
+  }
+
+  // Type-specific field sanitization
+  switch (sanitized.type) {
+    case 'LINEAR_SCALE':
+      // Ensure scale values are valid
+      if (!sanitized.scaleMin) sanitized.scaleMin = 1;
+      if (!sanitized.scaleMax) sanitized.scaleMax = 5;
+      if (sanitized.scaleMax <= sanitized.scaleMin) {
+        sanitized.scaleMax = sanitized.scaleMin + 4;
+      }
+      break;
+    
+    case 'FILE_UPLOAD':
+      if (!sanitized.maxFileSize) sanitized.maxFileSize = 10;
+      if (!fieldData.acceptedTypes) sanitized.acceptedTypes = 'image/*,application/pdf';
+      if (typeof fieldData.allowMultiple === 'boolean') {
+        sanitized.allowMultiple = fieldData.allowMultiple;
+      }
+      break;
+    
+    case 'PAYMENT':
+      if (!sanitized.amount) sanitized.amount = 0;
+      if (!fieldData.currency) sanitized.currency = 'USD';
+      break;
+    
+    case 'SECTION_HEADER':
+      ['title', 'backgroundColor', 'textColor', 'descriptionColor'].forEach(field => {
+        if (fieldData[field] && typeof fieldData[field] === 'string') {
+          sanitized[field] = fieldData[field];
+        }
+      });
+      ['fullWidth', 'centerText'].forEach(field => {
+        if (typeof fieldData[field] === 'boolean') {
+          sanitized[field] = fieldData[field];
+        }
+      });
+      break;
+  }
+
+  // Remove any undefined values
+  Object.keys(sanitized).forEach(key => {
+    if (sanitized[key] === undefined) {
+      delete sanitized[key];
+    }
+  });
+
+  console.log('Field sanitization complete:', sanitized);
+  return sanitized;
+};
+
   // UPDATED: Improved template handler function
 const handleUseTemplate = (templateData) => {
   console.log('Using template:', templateData);
-  
-  // Update form metadata
-  setFormData(prev => ({
-    ...prev,
-    title: templateData.title,
-    description: templateData.description,
-    accentColor: templateData.accentColor,
-    backgroundColor: templateData.backgroundColor
-  }));
-  
-  // Enhanced field type mapping to handle both formats
+
+  // Reset formData to initial state with template values
+  setFormData({
+    id: null, // Clear ID to trigger new form creation
+    title: templateData.title || 'Untitled Form',
+    description: templateData.description || '',
+    headerImage: templateData.headerImage || null,
+    backgroundColor: templateData.backgroundColor || '#ffffff',
+    accentColor: templateData.accentColor || '#4285f4',
+    logo: null,
+    settings: {
+      collectEmails: false,
+      requireLogin: false,
+      limitResponses: false,
+      maxResponses: '',
+      allowMultiple: true,
+      showProgressBar: true,
+      shuffleQuestions: false,
+      consentRequired: true,
+      language: templateData.language || 'en',
+      confirmationMessage: 'Thank you! Your response has been recorded.',
+      redirectUrl: '',
+      customBranding: true,
+      theme: templateData.theme || 'blue'
+    }
+  });
+
+  // Convert template fields
   const typeMapping = {
-    // Template format -> FormBuilder format
     'short-answer': 'SHORT_ANSWER',
     'paragraph': 'PARAGRAPH',
     'email': 'EMAIL',
@@ -300,7 +559,6 @@ const handleUseTemplate = (templateData) => {
     'section-header': 'SECTION_HEADER',
     'payment': 'PAYMENT',
     'calculated': 'CALCULATED',
-    // Handle if already in correct format
     'SHORT_ANSWER': 'SHORT_ANSWER',
     'PARAGRAPH': 'PARAGRAPH',
     'EMAIL': 'EMAIL',
@@ -320,12 +578,8 @@ const handleUseTemplate = (templateData) => {
     'CALCULATED': 'CALCULATED'
   };
 
-  // Convert template fields with proper ID generation
   const convertedFields = templateData.fields.map((field, index) => {
-    // Generate unique ID for each field
     const fieldId = field.id || `template_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    // Convert options format if they exist
     let convertedOptions = null;
     if (field.options && Array.isArray(field.options)) {
       convertedOptions = field.options.map((option, optIndex) => {
@@ -358,9 +612,10 @@ const handleUseTemplate = (templateData) => {
       required: field.required || false,
       options: convertedOptions,
       validations: field.validations || (field.required ? [{ type: 'required' }] : []),
-      formId: formData.id,
+      formId: null, // Will be set after form creation
       index: index + 1,
-      // Preserve any additional field properties
+      isTemplateField: true,
+      templateSource: templateData.title || 'Template',
       ...Object.keys(field).reduce((acc, key) => {
         if (!['id', 'type', 'question', 'description', 'required', 'options', 'validations'].includes(key)) {
           acc[key] = field[key];
@@ -369,21 +624,15 @@ const handleUseTemplate = (templateData) => {
       }, {})
     };
   });
-  
+
   console.log('Converted template fields:', convertedFields);
-  
-  // Set loading state
+
   setIsLoadingTemplate(true);
   setTemplateFields(convertedFields);
-  
-  // Clear existing state
+  setFields(convertedFields);
   setActiveField(null);
   setFormValues({});
-  
-  // Update fields state
-  setFields(convertedFields);
-  
-  // Clear loading state
+
   setTimeout(() => {
     setIsLoadingTemplate(false);
   }, 100);
@@ -468,9 +717,34 @@ const clearTemplateState = () => {
   console.log('Clearing template state');
   setIsLoadingTemplate(false);
   setTemplateFields(null);
-  // Don't clear fields here - let the useEffect handle field management
+  setFields([]);
+  setFormData(prev => ({
+    ...prev,
+    title: 'Untitled Form',
+    description: '',
+    headerImage: null,
+    backgroundColor: '#ffffff',
+    accentColor: '#4285f4',
+    logo: null,
+    settings: {
+      collectEmails: false,
+      requireLogin: false,
+      limitResponses: false,
+      maxResponses: '',
+      allowMultiple: true,
+      showProgressBar: true,
+      shuffleQuestions: false,
+      consentRequired: true,
+      language: 'en',
+      confirmationMessage: 'Thank you! Your response has been recorded.',
+      redirectUrl: '',
+      customBranding: true,
+      theme: 'blue'
+    }
+  }));
+  setActiveField(null);
+  setFormValues({});
 };
-
   // Cleanup template state when switching views
   useEffect(() => {
     if (currentView !== 'builder' && templateFields) {
@@ -486,7 +760,7 @@ const clearTemplateState = () => {
     console.log('DboxSystem DEBUG - FormData ID:', formData.id);
   }, [currentView, fields, formData.id]);
 
-  // UPDATED: Improved field state management
+// effect to manage fields state with detailed logging and corruption prevention
 useEffect(() => {
   console.log('Field state management check:', {
     formDataId: formData.id,
@@ -494,68 +768,184 @@ useEffect(() => {
     fieldsStateLength: fields?.length || 0,
     isLoadingTemplate,
     templateFieldsLength: templateFields?.length || 0,
-    templateFieldsPresent: !!templateFields
+    templateFieldsPresent: !!templateFields,
+    isResetting
   });
-  
-  // Priority 1: Use template fields if available and not loading
+
+  if (isResetting) {
+    console.log('Skipping field updates due to reset');
+    return;
+  }
+
+  // Handle template fields - they take priority
   if (templateFields && templateFields.length > 0 && !isLoadingTemplate) {
     console.log('Using template fields:', templateFields.length);
-    // Only update if fields are actually different
-    const fieldsAreDifferent = JSON.stringify(templateFields) !== JSON.stringify(fields);
-    if (fieldsAreDifferent) {
-      console.log('Template fields are different, updating...');
-      setFields(templateFields);
+    setFields(templateFields);
+    return;
+  }
+
+  // Handle regular fetched fields with enhanced validation
+  if (!isLoadingTemplate && 
+      !templateFields && 
+      fetchedFields && 
+      Array.isArray(fetchedFields) && 
+      formData.id) {
+    
+    console.log('Processing fetched fields:', fetchedFields.length);
+    
+    // ENHANCED: Validate and clean fetched fields
+    const validFields = fetchedFields.filter(field => {
+      // Check for basic field structure
+      if (!field || typeof field !== 'object') {
+        console.warn('Filtering out invalid field (not object):', field);
+        return false;
+      }
+
+      // Check for valid ID
+      if (!field.id || field.id === 'undefined' || field.id === 'name' || field.id === null) {
+        console.warn('Filtering out field with invalid ID:', field);
+        return false;
+      }
+
+      // Check for valid type
+      if (!field.type || typeof field.type !== 'string') {
+        console.warn('Filtering out field with invalid type:', field);
+        return false;
+      }
+
+      // Check formId matches (if provided)
+      if (field.formId && field.formId !== formData.id && parseInt(field.formId) !== parseInt(formData.id)) {
+        console.warn('Filtering out field with mismatched formId:', field);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    console.log(`Filtered ${fetchedFields.length} to ${validFields.length} valid fields`);
+    
+    // Only update if there's actually a change
+    const currentFieldIds = fields.map(f => f.id).sort();
+    const newFieldIds = validFields.map(f => f.id).sort();
+    const fieldsChanged = JSON.stringify(currentFieldIds) !== JSON.stringify(newFieldIds);
+    
+    if (fieldsChanged || fields.length !== validFields.length) {
+      console.log('Updating fields due to changes detected');
+      setFields(validFields);
     }
     return;
   }
-  
-  // Priority 2: Use fetched fields only if no template is active
-  if (!isLoadingTemplate && !templateFields && fetchedFields && Array.isArray(fetchedFields) && formData.id) {
-    console.log('Using fetched fields:', fetchedFields.length);
-    const fieldsAreDifferent = JSON.stringify(fetchedFields) !== JSON.stringify(fields);
-    if (fieldsAreDifferent) {
-      console.log('Fetched fields are different, updating...');
-      setFields(fetchedFields);
-    }
-    return;
-  }
-  
-  // Priority 3: Initialize empty fields for new forms (only if not loading template)
-  if (!isLoadingTemplate && !templateFields && !fetchedFields?.length && formData.id && fields.length > 0) {
-    console.log('Clearing fields for new form');
+
+  // Handle case where we have no server fields but local fields exist
+  if (!isLoadingTemplate && 
+      !templateFields && 
+      (!fetchedFields || fetchedFields.length === 0) && 
+      formData.id && 
+      fields.length > 0 &&
+      !fields.some(f => f.isTemplateField || f.id.toString().includes('template_'))) {
+    
+    console.log('Clearing non-template fields - no server fields found');
     setFields([]);
   }
-}, [fetchedFields, isLoadingTemplate, templateFields, formData.id, fields]);
+}, [fetchedFields, isLoadingTemplate, templateFields, formData.id, isResetting]);
 
-  const createDefaultForm = useMutation({
-    mutationFn: async () => {
-      const newForm = {
-        title: 'Untitled Form',
-        description: 'Add a description for your form',
-        settings: {
-          language: 'en',
-          theme: 'blue',
-          paymentGateway: 'stripe',
-        },
-      };
-      console.log('Creating form with data:', newForm);
-      const response = await createForm(newForm);
-      return response.data;
-    },
-    retry: 2,
-    retryDelay: 1000,
-    onSuccess: (newForm) => {
-      console.log('Created new form:', newForm);
-      queryClient.setQueryData(['forms'], (old) => [...(old || []), newForm]);
-      setFormData((prev) => ({ ...prev, id: newForm.id }));
-      setIsCreatingForm(false);
-    },
-    onError: (error) => {
-      console.error('Create form error:', error);
-      setError('Failed to create a new form. Please try again or contact support.');
-      setIsCreatingForm(false);
-    },
-  });
+useEffect(() => {
+  if (!formData.id || !fields.length) return;
+  
+  const cleanupTimer = setTimeout(async () => {
+    try {
+      console.log('Running initial cleanup check...');
+      
+      // Get server state
+      const response = await api.get(`/forms/${formData.id}/fields`);
+      const serverFields = response.data || [];
+      const serverFieldIds = new Set(serverFields.map(f => String(f.id)));
+      
+      // Find orphaned fields
+      const orphanedFields = fields.filter(field => {
+        if (field.isTemplateField || String(field.id).includes('template_')) {
+          return false; // Keep template fields
+        }
+        return !serverFieldIds.has(String(field.id));
+      });
+      
+      if (orphanedFields.length > 0) {
+        console.log(`Initial cleanup: removing ${orphanedFields.length} orphaned fields`);
+        setFields(prev => prev.filter(field => 
+          !orphanedFields.some(orphan => orphan.id === field.id)
+        ));
+        
+        if (orphanedFields.some(f => f.id === activeField)) {
+          setActiveField(null);
+        }
+      }
+      
+    } catch (error) {
+      console.debug('Initial cleanup failed:', error.message);
+    }
+  }, 2000); // Run after component settles
+  
+  return () => clearTimeout(cleanupTimer);
+}, [formData.id]); // Only run when form changes
+
+  // mutation to create a default form if none exist
+const createDefaultForm = useMutation({
+  mutationFn: async () => {
+    const newForm = {
+      title: 'Untitled Form',
+      description: 'Add a description for your form',
+      settings: {
+        language: 'en',
+        theme: 'blue',
+        paymentGateway: 'stripe',
+      },
+    };
+    console.log('Creating form with data:', newForm);
+    const response = await createForm(newForm);
+    return response.data;
+  },
+  retry: 2,
+  retryDelay: 1000,
+  onSuccess: (newForm) => {
+    console.log('Created new form:', newForm);
+    queryClient.setQueryData(['forms'], (old) => [...(old || []), newForm]);
+    // Reset formData to initial state with the new form's ID
+    setFormData({
+      id: newForm.id,
+      title: 'Untitled Form',
+      description: '',
+      headerImage: null,
+      backgroundColor: '#ffffff',
+      accentColor: '#4285f4',
+      logo: null,
+      settings: {
+        collectEmails: false,
+        requireLogin: false,
+        limitResponses: false,
+        maxResponses: '',
+        allowMultiple: true,
+        showProgressBar: true,
+        shuffleQuestions: false,
+        consentRequired: true,
+        language: 'en',
+        confirmationMessage: 'Thank you! Your response has been recorded.',
+        redirectUrl: '',
+        customBranding: true,
+        theme: 'blue'
+      }
+    });
+    setFields([]); // Reset fields
+    setActiveField(null); // Reset active field
+    setFormValues({}); // Reset form values
+    setIsCreatingForm(false);
+    queryClient.invalidateQueries(['fields', newForm.id]); // Invalidate fields query
+  },
+  onError: (error) => {
+    console.error('Create form error:', error);
+    setError('Failed to create a new form. Please try again or contact support.');
+    setIsCreatingForm(false);
+  },
+});
 
   useEffect(() => {
     if (user && !formsLoading && forms.length === 0 && !formData.id && !isCreatingForm) {
@@ -568,86 +958,295 @@ useEffect(() => {
     }
   }, [forms, formsLoading, user, formData.id, createDefaultForm, isCreatingForm]);
 
-  const addFieldMutation = useMutation({
-    mutationFn: async (newField) => {
-      console.log('Sending field data to API:', JSON.stringify(newField, null, 2));
+const addFieldMutation = useMutation({
+  mutationFn: async (newField) => {
+    console.log('=== API CALL START ===');
+    console.log('Making API call to create field...');
+    console.log('Endpoint: POST /api/fields');
+    console.log('Payload:', JSON.stringify(newField, null, 2));
+    
+    setIsAddingField(true);
+    
+    try {
       const response = await createField(newField);
+      console.log('=== API CALL SUCCESS ===');
+      console.log('Response status:', response.status);
+      console.log('Response data:', response.data);
       return response.data;
-    },
-    onSuccess: (newField) => {
-      console.log('Field added successfully:', newField);
-      queryClient.setQueryData(['fields', formData.id], (old) => [...(old || []), newField]);
-      setFields((prev) => [...prev, newField]);
-      setActiveField(newField.id);
-    },
-    onError: (error) => {
-      console.error('Add field error:', error.response?.data || error.message);
-      setError(`Failed to add field: ${error.response?.data?.details || error.message}`);
-    },
-  });
-
-  const updateFieldMutation = useMutation({
-    mutationFn: async ({ id, updatedField }) => {
-      if (!id || id === 'undefined') {
-        console.error('Invalid field ID:', id, updatedField);
-        throw new Error('Invalid field ID');
+    } catch (error) {
+      console.log('=== API CALL ERROR ===');
+      console.error('Request failed:', error);
+      
+      // Log the actual request that was sent
+      if (error.config) {
+        console.log('Request config:', {
+          method: error.config.method,
+          url: error.config.url,
+          headers: error.config.headers,
+          data: error.config.data
+        });
       }
-      const response = await api.patch(`/fields/${id}`, updatedField);
+      
+      throw error;
+    }
+  },
+  onSuccess: (serverField) => {
+    console.log('Field created successfully:', serverField);
+    setIsAddingField(false);
+  },
+  onError: (error) => {
+    console.error('Field creation failed:', error);
+    setIsAddingField(false);
+  },
+  retry: (failureCount, error) => {
+    // Don't retry validation errors (400s)
+    if (error.response?.status === 400) return false;
+    return failureCount < 2;
+  }
+});
+
+  const refreshFieldsFromServer = async () => {
+  if (!formData.id) return;
+  
+  try {
+    console.log('Refreshing fields from server for form:', formData.id);
+    
+    // Clear template state if it exists
+    if (templateFields) {
+      clearTemplateState();
+    }
+    
+    // Force refetch from server
+    await queryClient.invalidateQueries(['fields', formData.id]);
+    
+    // The useQuery will automatically refetch and update state
+  } catch (error) {
+    console.error('Error refreshing fields:', error);
+    setError('Failed to refresh fields. Please reload the page.');
+  }
+};
+
+ // Debug function to log cuttent field state
+const updateFieldMutation = useMutation({
+  mutationFn: async ({ id, updatedField }) => {
+    const fieldId = String(id);
+    
+    // Find field in current state
+    const fieldInState = fields.find(f => f.id == fieldId);
+    if (!fieldInState) {
+      throw new Error(`Field ${fieldId} not found in current state`);
+    }
+    
+    // Skip API for template fields
+    if (fieldInState.isTemplateField || fieldId.includes('template_')) {
+      return { ...fieldInState, ...updatedField };
+    }
+    
+    const backendSafeData = {
+      ...sanitizeFieldData(updatedField),
+      formId: parseInt(formData.id, 10),
+    };
+    
+    // Remove undefined properties
+    Object.keys(backendSafeData).forEach(key => {
+      if (backendSafeData[key] === undefined) {
+        delete backendSafeData[key];
+      }
+    });
+    
+    try {
+      // Single API call - if it fails, the field doesn't exist
+      const response = await api.put(`/fields/${fieldId}`, backendSafeData);
       return response.data;
-    },
-    onSuccess: (updatedField) => {
+    } catch (error) {
+      if (error.response?.status === 404) {
+        console.warn(`Field ${fieldId} not found on server, removing from local state`);
+        
+        // Remove from local state immediately
+        setFields(prev => prev.filter(f => f.id != fieldId));
+        if (activeField === fieldId) {
+          setActiveField(null);
+        }
+        
+        return null; // Indicate field was removed
+      }
+      throw error;
+    }
+  },
+  onSuccess: (updatedField, { id }) => {
+    if (updatedField === null) {
+      console.log('Field removed from state due to 404');
+      return;
+    }
+    
+    // Update query cache
+    if (updatedField && updatedField.id && formData.id) {
       queryClient.setQueryData(['fields', formData.id], (old) =>
-        (old || []).map((field) => (field.id === updatedField.id ? updatedField : field))
+        (old || []).map((field) => 
+          field.id === updatedField.id ? updatedField : field
+        )
       );
-      setFields((prev) =>
-        prev.map((field) => (field.id === updatedField.id ? updatedField : field))
-      );
-    },
-    onError: (error) => {
-      console.error('Update field error:', error);
-      setError('Failed to update field');
     }
-  });
-
-  const deleteFieldMutation = useMutation({
-    mutationFn: async (id) => {
-      if (!id || id === 'undefined') {
-        console.error('Invalid field ID for deletion:', id);
-        throw new Error('Invalid field ID');
-      }
-      await api.delete(`/fields/${id}`);
-    },
-    onSuccess: (_, id) => {
-      queryClient.setQueryData(['fields', formData.id], (old) => (old || []).filter((field) => field.id !== id));
-      setFields((prev) => prev.filter((field) => field.id !== id));
-      if (activeField === id) setActiveField(null);
-    },
-    onError: (error) => {
-      console.error('Delete field error:', error);
-      setError('Failed to delete field');
+  },
+  onError: (error, { id }) => {
+    console.error('Field update failed:', error);
+    
+    // Only show user errors for unexpected failures
+    if (!error.message.includes('not found') && error.response?.status !== 404) {
+      setError(`Failed to update field: ${error.message}`);
     }
-  });
+  },
+  retry: false // No retries - fail fast
+});
 
-  // UPDATED: addField function with template state clearing
-const addField = (type) => {
-  console.log('Adding field. FormData ID:', formData.id, 'Type:', type);
-  
-  // DO NOT clear template state when adding fields - preserve existing fields
-  // The original code was clearing template state here, which removed all template fields
-  // if (templateFields) {
-  //   console.log('Clearing template state - user adding custom field');
-  //   clearTemplateState();
-  // }
-  
+
+// Enhanced field synchronization function
+const syncFieldsWithServer = async () => {
   if (!formData.id) {
-    console.error('Cannot add field: formData.id is null');
-    setError('Please wait for the form to load before adding fields.');
+    console.log('No form ID, skipping sync');
     return;
   }
+
+  try {
+    console.log('Syncing fields with server for form:', formData.id);
+    
+    // Clear template state if it exists
+    if (templateFields) {
+      clearTemplateState();
+    }
+    
+    // Force refetch from server
+    await queryClient.invalidateQueries(['fields', formData.id]);
+    
+    // Wait a moment for the query to refetch
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    console.log('Field sync completed');
+    
+  } catch (error) {
+    console.error('Error syncing fields:', error);
+    setError('Failed to sync fields with server. Please refresh the page.');
+  }
+};
+
+ const deleteFieldMutation = useMutation({
+  mutationFn: async (id) => {
+    console.log('Deleting field via API:', id);
+    
+    if (!id || id === 'undefined' || id === 'null' || id === 'name') {
+      throw new Error('Invalid field ID for deletion');
+    }
+    
+    // Check if it's a template field that shouldn't be deleted via API
+    const fieldToDelete = fields.find(f => f.id == id);
+    if (fieldToDelete && (fieldToDelete.isTemplateField || id.toString().includes('template_'))) {
+      throw new Error('Template field should be deleted locally only');
+    }
+    
+    await api.delete(`/fields/${id}`);
+  },
+  onSuccess: (_, id) => {
+    console.log('Field deleted successfully via API:', id);
+    
+    // Update local state
+    setFields(prev => prev.filter(field => field.id != id));
+    
+    // Update query cache
+    queryClient.setQueryData(['fields', formData.id], (old) => 
+      (old || []).filter((field) => field.id !== id)
+    );
+    
+    // Clear active field if it was the deleted one
+    if (activeField === id) {
+      setActiveField(null);
+    }
+  },
+  onError: (error, id) => {
+    console.error('Delete field error:', error);
+    
+    if (error.response?.status === 404) {
+      console.log('Field not found on server, removing from local state anyway');
+      setFields(prev => prev.filter(field => field.id != id));
+      if (activeField === id) {
+        setActiveField(null);
+      }
+      return;
+    }
+    
+    setError(`Failed to delete field: ${error.message}`);
+  }
+});
+
+// Add this helper function to clean up orphaned fields
+const cleanupOrphanedFields = async () => {
+  if (!formData.id || fields.length === 0) return;
   
-  if (!type || typeof type !== 'string') {
-    console.error('Invalid field type:', type);
-    setError(`Invalid field type: ${type} must be a non-empty string`);
+  try {
+    console.log('Cleaning up orphaned fields...');
+    
+    // Get fresh field data from server
+    const response = await api.get(`/fields/form/${formData.id}`);
+    const serverFields = Array.isArray(response.data) ? response.data : [];
+    const serverFieldIds = serverFields.map(f => f.id.toString());
+    
+    // Find local fields that don't exist on server
+    const orphanedFields = fields.filter(field => {
+      // Skip template fields and new fields
+      if (field.isTemplateField || 
+          field.id.toString().includes('template_') || 
+          field.id.toString().includes('field_') ||
+          !field.formId) {
+        return false;
+      }
+      
+      // Check if field exists on server
+      return !serverFieldIds.includes(field.id.toString());
+    });
+    
+    if (orphanedFields.length > 0) {
+      console.log('Found orphaned fields:', orphanedFields.map(f => f.id));
+      
+      // Remove orphaned fields from local state
+      setFields(prev => prev.filter(field => 
+        !orphanedFields.some(orphan => orphan.id === field.id)
+      ));
+      
+      // Clear active field if it was orphaned
+      if (orphanedFields.some(f => f.id === activeField)) {
+        setActiveField(null);
+      }
+      
+      console.log(`Removed ${orphanedFields.length} orphaned fields`);
+    }
+    
+  } catch (error) {
+    console.error('Error cleaning up orphaned fields:', error);
+  }
+};
+
+  // UPDATED: addField function with template state clearing
+
+// Fixed addField function in DboxSystem.jsx
+const addField = (type, fieldData = null) => {
+  console.log('=== ADD FIELD DEBUG START ===');
+  console.log('Adding field. FormData ID:', formData.id, 'Type:', type);
+  console.log('Field data provided:', fieldData);
+  
+  // Validate formId first
+  const formId = parseInt(formData.id, 10);
+  if (!formData.id || isNaN(formId)) {
+    console.error('Cannot add field: Invalid or missing formData.id', formData.id);
+    setError('Please wait for the form to load before adding fields.');
+    
+    if (!isCreatingForm) {
+      setIsCreatingForm(true);
+      createDefaultForm.mutate(null, {
+        onSuccess: (newForm) => {
+          setFormData(prev => ({ ...prev, id: newForm.id }));
+          setTimeout(() => addField(type, fieldData), 200);
+        }
+      });
+    }
     return;
   }
   
@@ -661,80 +1260,252 @@ const addField = (type) => {
   const normalizedType = type.toUpperCase().replace('-', '_');
   if (!validFieldTypes.includes(normalizedType)) {
     console.error('Unsupported field type:', type);
-    setError(`Unsupported field type: ${type}. Supported types: ${validFieldTypes.join(', ')}`);
     return;
   }
   
-  // Generate unique field ID
-  const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Create field data with enhanced validation and logging
+  let newField;
   
-  const newField = {
-    id: fieldId,
-    formId: parseInt(formData.id, 10),
-    type: normalizedType,
-    question: `New ${normalizedType.toLowerCase().replace('_', ' ')} question`,
-    description: '',
-    required: false,
-    options: ['MULTIPLE_CHOICE', 'CHECKBOXES', 'DROPDOWN'].includes(normalizedType)
-      ? [
-          { id: `${fieldId}_option_1`, value: 'Option 1', score: 0 },
-          { id: `${fieldId}_option_2`, value: 'Option 2', score: 0 }
-        ]
-      : null,
-    validations: [],
-    index: fields.length + 1,
-    // Additional properties for specific field types
-    ...(normalizedType === 'CALCULATED' && { calculation: [] }),
-    ...(normalizedType === 'PAYMENT' && { amount: 0, currency: 'NGN' }),
-    ...(normalizedType === 'LINEAR_SCALE' && { scaleMin: 1, scaleMax: 5 })
-  };
-  
-  console.log('Adding field with data:', newField);
-  
-  // If we have template fields active, add to template fields and regular fields
-  if (templateFields && templateFields.length > 0) {
-    console.log('Adding field to existing template fields');
-    
-    // Add to template fields
-    const updatedTemplateFields = [...templateFields, newField];
-    setTemplateFields(updatedTemplateFields);
-    
-    // Add to regular fields
-    setFields(updatedTemplateFields);
-    
-    // Set as active field
-    setActiveField(newField.id);
+  if (fieldData) {
+    // Use provided field data (from template or duplication)
+    newField = {
+      ...fieldData,
+      formId: formId,
+      type: normalizedType,
+      index: fields.length + 1
+    };
   } else {
-    // Regular field addition via API
-    addFieldMutation.mutate(newField);
+    // Create new field from scratch
+    const baseField = {
+      formId: formId,
+      type: normalizedType,
+      question: `New ${normalizedType.toLowerCase().replace('_', ' ')} question`,
+      description: '',
+      required: false,
+      index: fields.length + 1
+    };
+
+    // Add type-specific properties
+    switch (normalizedType) {
+      case 'MULTIPLE_CHOICE':
+      case 'CHECKBOXES':
+      case 'DROPDOWN':
+        baseField.options = [
+          { value: 'Option 1', score: 0 },
+          { value: 'Option 2', score: 0 }
+        ];
+        break;
+        
+      case 'LINEAR_SCALE':
+        // CRITICAL FIX: Properly initialize LINEAR_SCALE fields
+        baseField.scaleMin = 1;
+        baseField.scaleMax = 5;
+        baseField.scaleMinLabel = '';
+        baseField.scaleMaxLabel = '';
+        console.log('Initializing LINEAR_SCALE field with:', {
+          scaleMin: baseField.scaleMin,
+          scaleMax: baseField.scaleMax
+        });
+        break;
+        
+      case 'FILE_UPLOAD':
+        baseField.maxFileSize = 10;
+        baseField.acceptedTypes = 'image/*,application/pdf';
+        baseField.allowMultiple = false;
+        break;
+        
+      case 'PAYMENT':
+        baseField.amount = 0;
+        baseField.currency = 'USD';
+        baseField.paymentProvider = '';
+        break;
+        
+      case 'CALCULATED':
+        baseField.calculation = [];
+        break;
+        
+      case 'SECTION_HEADER':
+        baseField.title = 'Section Header';
+        baseField.backgroundColor = '#ffffff';
+        baseField.textColor = '#000000';
+        baseField.fullWidth = false;
+        baseField.centerText = false;
+        break;
+        
+      default:
+        break;
+    }
+
+    newField = baseField;
   }
+
+  // Generate a temporary ID for optimistic rendering
+  const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const optimisticField = { ...newField, id: tempId, isOptimistic: true };
+
+  console.log('Adding field optimistically to local state:', optimisticField);
+
+  // Add to local state immediately for instant UI feedback
+  setFields(prev => [...prev, optimisticField]);
+  setActiveField(tempId);
+
+  // Handle template fields (local only)
+  if (templateFields && templateFields.length > 0) {
+    const templateField = { ...newField, id: tempId, isTemplateField: true };
+    const updatedTemplateFields = [...templateFields, templateField];
+    setTemplateFields(updatedTemplateFields);
+    console.log('=== ADD FIELD DEBUG END (TEMPLATE) ===');
+    return;
+  }
+
+  // Enhanced sanitization specifically for API requirements
+  const sanitizedField = sanitizeFieldForAPI(newField);
+  
+  console.log('=== FIELD PAYLOAD AFTER SANITIZATION ===');
+  console.log('Sanitized field payload:', JSON.stringify(sanitizedField, null, 2));
+
+  // For regular fields: Create on server, then update local state
+  console.log('Sending field to server...');
+  
+  addFieldMutation.mutate(sanitizedField, {
+    onSuccess: (serverField) => {
+      console.log('=== FIELD CREATED SUCCESSFULLY ===');
+      console.log('Server response:', serverField);
+      
+      // Replace optimistic field with server-confirmed data
+      setFields(prev => prev.map(field => 
+        field.id === tempId ? serverField : field
+      ));
+      setActiveField(serverField.id);
+      
+      // Update query cache
+      queryClient.setQueryData(['fields', formData.id], (old) => {
+        const withoutOptimistic = (old || []).filter(f => f.id !== tempId);
+        return [...withoutOptimistic, serverField];
+      });
+      
+      console.log('=== ADD FIELD DEBUG END (SUCCESS) ===');
+    },
+    onError: (error) => {
+      console.log('=== FIELD CREATION FAILED ===');
+      console.error('Full error object:', error);
+      
+      // Remove optimistic field on error
+      setFields(prev => prev.filter(field => field.id !== tempId));
+      setActiveField(null);
+      
+      // Enhanced error message based on response
+      let errorMessage = 'Failed to add field: ';
+      
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage += error.response.data;
+        } else if (error.response.data.message) {
+          errorMessage += error.response.data.message;
+        } else if (error.response.data.error) {
+          errorMessage += error.response.data.error;
+        } else {
+          errorMessage += JSON.stringify(error.response.data);
+        }
+      } else {
+        errorMessage += error.message || 'Unknown error occurred';
+      }
+      
+      console.error('Processed error message:', errorMessage);
+      setError(errorMessage);
+      console.log('=== ADD FIELD DEBUG END (ERROR) ===');
+    }
+  });
 };
 
-  // UPDATED: updateField function to handle template fields
- const updateField = (fieldId, updates) => {
+
+
+
+  //  
+const updateField = (fieldId, updates) => {
   if (!fieldId) {
-    console.error('Attempted to update field with invalid ID:', fieldId, updates);
+    console.warn('updateField called with no fieldId');
     return;
   }
   
-  console.log('Updating field:', fieldId, 'with updates:', updates);
+  const fieldIdString = String(fieldId);
   
-  // If we're updating a template field, handle it locally
-  if (templateFields && fieldId.toString().includes('template_')) {
-    console.log('Updating template field:', fieldId);
-    
-    const updatedTemplateFields = templateFields.map(field => 
-      field.id === fieldId ? { ...field, ...updates } : field
-    );
-    
-    setTemplateFields(updatedTemplateFields);
-    setFields(updatedTemplateFields);
+  // Skip invalid IDs immediately
+  if (fieldIdString === 'undefined' || fieldIdString === 'name' || fieldIdString === 'null') {
+    console.warn('Invalid field ID, ignoring update:', fieldId);
     return;
   }
   
-  // For regular fields, use the mutation
-  updateFieldMutation.mutate({ id: fieldId, updatedField: updates });
+  // Find field in current state
+  const currentField = fields.find(f => f.id == fieldId);
+  if (!currentField) {
+    console.warn('Field not found in local state, ignoring update:', fieldId);
+    return;
+  }
+  
+  // ALWAYS update local state immediately for UI responsiveness
+  setFields(prev => prev.map(field => 
+    field.id == fieldId ? { ...field, ...updates } : field
+  ));
+  
+  // Skip API sync for template/local fields
+  if (currentField.isTemplateField || 
+      fieldIdString.includes('template_') || 
+      fieldIdString.includes('field_') ||
+      !currentField.formId) {
+    console.log('Local field update only - no API sync needed');
+    return;
+  }
+  
+  // CRITICAL: Only sync to API if we have a valid form ID
+  if (!formData.id) {
+    console.warn('No form ID available for API sync');
+    return;
+  }
+  
+  // Debounced API sync with validation
+  if (updateField.timeout) {
+    clearTimeout(updateField.timeout);
+  }
+  
+  updateField.timeout = setTimeout(() => {
+    console.log('Syncing field update to API for field:', fieldId);
+    
+    // Double-check field still exists before API call
+    const stillExists = fields.find(f => f.id == fieldId);
+    if (!stillExists) {
+      console.log('Field no longer exists, skipping API sync');
+      return;
+    }
+    
+    updateFieldMutation.mutate({ 
+      id: fieldId, 
+      updatedField: sanitizeFieldData(updates) 
+    });
+  }, 800); // Increased debounce time
 };
+
+
+
+// Also add this function to help debug field state
+const debugFieldState = () => {
+  console.log('=== FIELD STATE DEBUG ===');
+  console.log('Current form ID:', formData.id);
+  console.log('Fields in state:', fields.length);
+  console.log('Template fields:', templateFields?.length || 0);
+  console.log('Active field:', activeField);
+  
+  fields.forEach((field, index) => {
+    console.log(`Field ${index}:`, {
+      id: field.id,
+      formId: field.formId,
+      type: field.type,
+      question: field.question?.substring(0, 30),
+      isTemplate: field.isTemplateField || fieldIdString.includes('template_')
+    });
+  });
+};
+
 
 
   // UPDATED: duplicateField function with template state clearing
@@ -847,14 +1618,17 @@ const deleteField = (id) => {
     }
   };
 
- const convertTemplateToRegularFields = async () => {
-  if (!templateFields || templateFields.length === 0) return;
-  
+//  function to convert template fields to regular fields via API
+const convertTemplateToRegularFields = async () => {
+  if (!templateFields || templateFields.length === 0) {
+    console.log('No template fields to convert');
+    return;
+  }
+
   console.log('Converting template fields to regular fields...');
   setIsLoadingTemplate(true);
-  
+
   try {
-    // Save all template fields as regular fields via API
     const promises = templateFields.map(async (field, index) => {
       const fieldData = {
         formId: parseInt(formData.id, 10),
@@ -865,28 +1639,21 @@ const deleteField = (id) => {
         options: field.options,
         validations: field.validations,
         index: index + 1,
-        // Additional properties
         ...(field.calculation && { calculation: field.calculation }),
         ...(field.amount !== undefined && { amount: field.amount }),
         ...(field.currency && { currency: field.currency }),
       };
-      
+
       const response = await createField(fieldData);
       return response.data;
     });
-    
+
     const savedFields = await Promise.all(promises);
     console.log('Template fields saved as regular fields:', savedFields);
-    
-    // Update state with saved fields
+
     setFields(savedFields);
-    
-    // Clear template state
     clearTemplateState();
-    
-    // Refresh fields from API
     queryClient.invalidateQueries(['fields', formData.id]);
-    
   } catch (error) {
     console.error('Error converting template fields:', error);
     setError('Failed to save template fields. Please try again.');
@@ -1071,6 +1838,10 @@ const setFieldsFromFormBuilder = (newFields) => {
                   setFieldsFromFormBuilder={setFieldsFromFormBuilder}
                   error={error}
                   setError={setError}
+                  setFields={setFields}
+                  queryClient={queryClient} 
+                  convertTemplateToRegularFields={convertTemplateToRegularFields}
+                  setIsResetting={setIsResetting}
                 />
               );
               console.log('=== RENDERING FORM BUILDER ===');
@@ -1091,34 +1862,43 @@ const setFieldsFromFormBuilder = (newFields) => {
               }
               
               return (
-                <FormBuilder
-                  formData={formData}
-                  setFormData={setFormData}
-                  fields={fields || []}
-                  activeField={activeField}
-                  setActiveField={setActiveField}
-                  previewMode={previewMode}
-                  setPreviewMode={setPreviewMode}
-                  fieldTypes={fieldTypes}
-                  languages={languages}
-                  paymentGateways={[{ id: 'stripe', name: 'Stripe' }, { id: 'paypal', name: 'PayPal' }]}
-                  addField={addField}
-                  updateField={updateField}
-                  duplicateField={duplicateField}
-                  deleteField={deleteField}
-                  addOptionToField={addOptionToField}
-                  updateOption={updateOption}
-                  deleteOption={deleteOption}
-                  setCurrentView={setCurrentView}
-                  setShowShareModal={setShowShareModal}
-                  isOnline={isOnline}
-                  isMobile={isMobile}
-                  formValues={formValues}
-                  onFieldValueChange={handleFieldValueChange}
-                  clearTemplateState={clearTemplateState}
-                  isLoadingTemplate={isLoadingTemplate}
-                  templateFields={templateFields}
-                />
+            <FormBuilder
+              formData={formData}
+              setFormData={setFormData}
+              fields={fields || []}
+              activeField={activeField}
+              setActiveField={setActiveField}
+              previewMode={previewMode}
+              setPreviewMode={setPreviewMode}
+              fieldTypes={fieldTypes}
+              languages={languages}
+              paymentGateways={[{ id: 'stripe', name: 'Stripe' }, { id: 'paypal', name: 'PayPal' }]}
+              addField={addField}
+              updateField={updateField}
+              duplicateField={duplicateField}
+              deleteField={deleteField}
+              addOptionToField={addOptionToField}
+              updateOption={updateOption}
+              deleteOption={deleteOption}
+              setCurrentView={setCurrentView}
+              setShowShareModal={setShowShareModal}
+              isOnline={isOnline}
+              isMobile={isMobile}
+              formValues={formValues}
+              onFieldValueChange={handleFieldValueChange}
+              clearTemplateState={clearTemplateState}
+              isLoadingTemplate={isLoadingTemplate}
+              templateFields={templateFields}
+              setTemplateFields={setTemplateFieldsFromFormBuilder}
+              setIsLoadingTemplateFromFormBuilder={setIsLoadingTemplateFromFormBuilder}
+              setFieldsFromFormBuilder={setFieldsFromFormBuilder}
+              error={error}
+              setError={setError}
+              setFields={setFields}
+              queryClient={queryClient}
+              convertTemplateToRegularFields={convertTemplateToRegularFields}
+              setIsResetting={setIsResetting} // Add this prop
+            />
               );
             case 'responses':
               return (

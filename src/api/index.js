@@ -32,6 +32,45 @@ export const getResponses = (formId) => api.get(`/responses/${formId}`);
 export const createField = (fieldData) => api.post('/fields', fieldData);
 export const getFields = (formId) => api.get(`/fields/${formId}`);
 export const submitResponse = (formId, responseData) => api.post(`/forms/${formId}/responses`, responseData);
+
+
+// Delete a specific field
+export const deleteField = (fieldId) => {
+  console.log('Deleting field with ID:', fieldId);
+  
+  if (!fieldId || fieldId === 'undefined' || fieldId === 'name') {
+    console.error('Invalid field ID provided to deleteField:', fieldId);
+    return Promise.reject(new Error('Invalid field ID'));
+  }
+  
+  return api.delete(`/fields/${fieldId}`);
+};
+
+// Update an existing field
+export const updateField = (fieldId, fieldData) => {
+  console.log('Updating field:', fieldId, fieldData);
+  
+  if (!fieldId || fieldId === 'undefined' || fieldId === 'name') {
+    console.error('Invalid field ID provided to updateField:', fieldId);
+    return Promise.reject(new Error('Invalid field ID'));
+  }
+  
+  // Changed from PUT to PATCH for partial updates
+  return api.patch(`/fields/${fieldId}`, fieldData);
+};
+
+// Duplicate a field
+export const duplicateField = (fieldId) => {
+  console.log('Duplicating field with ID:', fieldId);
+  
+  if (!fieldId || fieldId === 'undefined' || fieldId === 'name') {
+    console.error('Invalid field ID provided to duplicateField:', fieldId);
+    return Promise.reject(new Error('Invalid field ID'));
+  }
+  
+  return api.post(`/fields/${fieldId}/duplicate`);
+};
+
 export const uploadFile = (file) => {
   const formData = new FormData();
   formData.append('file', file);

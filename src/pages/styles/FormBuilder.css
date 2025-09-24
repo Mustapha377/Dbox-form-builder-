@@ -1,0 +1,835 @@
+/* FormBuilder.css - Complete stylesheet for FormBuilder component */
+
+/* Animation keyframes */
+@keyframes form-builder-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes form-builder-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes form-builder-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes form-builder-bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes form-builder-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes form-builder-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes form-builder-loading-shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Animation classes */
+.form-builder-scale-in {
+  animation: form-builder-scale-in 0.3s ease-out forwards;
+}
+
+.form-builder-slide-in {
+  animation: form-builder-slide-in 0.3s ease-out forwards;
+}
+
+.form-builder-fade-in {
+  animation: form-builder-fade-in 0.2s ease-out forwards;
+}
+
+.form-builder-bounce-in {
+  animation: form-builder-bounce-in 0.5s ease-out forwards;
+}
+
+.form-builder-shake {
+  animation: form-builder-shake 0.5s ease-in-out;
+}
+
+.form-builder-pulse {
+  animation: form-builder-pulse 1s ease-in-out infinite;
+}
+
+/* Form builder container */
+.form-builder-container {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Enhanced phone field styles */
+.form-builder-phone-field {
+  position: relative;
+}
+
+.form-builder-phone-field .country-select {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 0;
+}
+
+.form-builder-phone-field .phone-input {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.form-builder-phone-field .phone-input:focus {
+  z-index: 10;
+}
+
+/* Enhanced number field styles */
+.form-builder-number-field {
+  position: relative;
+}
+
+.form-builder-number-field input::-webkit-outer-spin-button,
+.form-builder-number-field input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.form-builder-number-field input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Field validation states */
+.form-builder-field-valid {
+  border-color: #10B981 !important;
+  box-shadow: 0 0 0 1px #10B981;
+}
+
+.form-builder-field-invalid {
+  border-color: #EF4444 !important;
+  box-shadow: 0 0 0 1px #EF4444;
+}
+
+.form-builder-field-warning {
+  border-color: #F59E0B !important;
+  box-shadow: 0 0 0 1px #F59E0B;
+}
+
+/* Toast notification styles */
+.form-builder-toast {
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.form-builder-toast.success {
+  background: rgba(16, 185, 129, 0.95);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.form-builder-toast.error {
+  background: rgba(239, 68, 68, 0.95);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.form-builder-toast.warning {
+  background: rgba(245, 158, 11, 0.95);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.form-builder-toast.info {
+  background: rgba(59, 130, 246, 0.95);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Modal backdrop */
+.form-builder-modal-backdrop {
+  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* Loading states */
+.form-builder-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.form-builder-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: form-builder-loading-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Drag and drop styles */
+.form-builder-dragging {
+  opacity: 0.5;
+  transform: rotate(5deg);
+}
+
+.form-builder-drag-over {
+  background-color: rgba(59, 130, 246, 0.05);
+  border-color: #3B82F6;
+  border-style: dashed;
+}
+
+/* Field hover states */
+.form-builder-field:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+/* Focus states */
+.form-builder-focus-ring:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #3B82F6;
+}
+
+/* Phone field specific styles */
+.form-builder-phone-container {
+  display: flex;
+  gap: 0;
+}
+
+.form-builder-phone-container .country-dropdown {
+  border-radius: 0.5rem 0 0 0.5rem;
+  border-right: 0;
+  min-width: 140px;
+}
+
+.form-builder-phone-container .phone-number-input {
+  border-radius: 0 0.5rem 0.5rem 0;
+  flex: 1;
+}
+
+.form-builder-phone-container .phone-number-input:focus {
+  z-index: 10;
+  border-left: 1px solid;
+}
+
+/* Number field validation */
+.form-builder-number-input {
+  position: relative;
+}
+
+.form-builder-number-input.has-validation::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.form-builder-number-input.valid::after {
+  background-color: #10B981;
+}
+
+.form-builder-number-input.invalid::after {
+  background-color: #EF4444;
+}
+
+/* Enhanced button styles */
+.form-builder-btn-primary {
+  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.form-builder-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px -1px rgba(59, 130, 246, 0.4);
+}
+
+.form-builder-btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px -1px rgba(59, 130, 246, 0.3);
+}
+
+.form-builder-btn-secondary {
+  background: white;
+  border: 1px solid #D1D5DB;
+  color: #374151;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.form-builder-btn-secondary:hover {
+  background: #F9FAFB;
+  border-color: #9CA3AF;
+}
+
+/* Field type selector styles */
+.form-builder-field-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+
+.form-builder-field-type-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-builder-field-type-item:hover {
+  border-color: #3B82F6;
+  background: #EFF6FF;
+  transform: translateY(-1px);
+}
+
+.form-builder-field-type-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #6B7280;
+  transition: color 0.2s ease;
+}
+
+.form-builder-field-type-item:hover .form-builder-field-type-icon {
+  color: #3B82F6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .form-builder-scale-in {
+    animation-duration: 0.2s;
+  }
+  
+  .form-builder-slide-in {
+    animation-duration: 0.2s;
+  }
+  
+  .form-builder-phone-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .form-builder-phone-container .country-dropdown {
+    border-radius: 0.5rem;
+    border: 1px solid #D1D5DB;
+  }
+  
+  .form-builder-phone-container .phone-number-input {
+    border-radius: 0.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-builder-field-type-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-builder-btn-primary,
+  .form-builder-btn-secondary {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .form-builder-no-print {
+    display: none !important;
+  }
+  
+  .form-builder-phone-container,
+  .form-builder-number-input {
+    break-inside: avoid;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .form-builder-field-invalid,
+  .form-builder-field-valid {
+    border-width: 2px;
+  }
+  
+  .form-builder-phone-container .country-dropdown,
+  .form-builder-phone-container .phone-number-input {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .form-builder-scale-in,
+  .form-builder-slide-in,
+  .form-builder-fade-in,
+  .form-builder-bounce-in,
+  .form-builder-shake,
+  .form-builder-pulse {
+    animation: none;
+  }
+  
+  .form-builder-field:hover,
+  .form-builder-btn-primary:hover {
+    transform: none;
+  }
+  
+  .form-builder-field-type-item:hover {
+    transform: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .form-builder-toast.success {
+    background: rgba(16, 185, 129, 0.9);
+  }
+  
+  .form-builder-toast.error {
+    background: rgba(239, 68, 68, 0.9);
+  }
+  
+  .form-builder-toast.warning {
+    background: rgba(245, 158, 11, 0.9);
+  }
+  
+  .form-builder-toast.info {
+    background: rgba(59, 130, 246, 0.9);
+  }
+  
+  .form-builder-field-type-item {
+    background: #1F2937;
+    border-color: #374151;
+    color: #F9FAFB;
+  }
+  
+  .form-builder-field-type-item:hover {
+    background: #111827;
+    border-color: #3B82F6;
+  }
+}
+
+/* Accessibility improvements */
+.form-builder-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.form-builder-focus-visible:focus-visible {
+  outline: 2px solid #3B82F6;
+  outline-offset: 2px;
+}
+
+/* Custom scrollbar for form builder */
+.form-builder-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.form-builder-scrollbar::-webkit-scrollbar-track {
+  background: #F3F4F6;
+  border-radius: 3px;
+}
+
+.form-builder-scrollbar::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+
+.form-builder-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Success states */
+.form-builder-success-border {
+  border-color: #10B981;
+  box-shadow: 0 0 0 1px #10B981;
+}
+
+.form-builder-success-text {
+  color: #059669;
+}
+
+.form-builder-success-bg {
+  background-color: #D1FAE5;
+}
+
+/* Error states */
+.form-builder-error-border {
+  border-color: #EF4444;
+  box-shadow: 0 0 0 1px #EF4444;
+}
+
+.form-builder-error-text {
+  color: #DC2626;
+}
+
+.form-builder-error-bg {
+  background-color: #FEE2E2;
+}
+
+/* Loading skeleton */
+.form-builder-skeleton {
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+  background-size: 200% 100%;
+  animation: form-builder-loading-shimmer 1.5s infinite;
+}
+
+/* Field transition effects */
+.form-builder-field-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.form-builder-field-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.form-builder-field-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.form-builder-field-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.form-builder-field-exit-active {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+/* Phone number formatting visual feedback */
+.form-builder-phone-valid .country-dropdown,
+.form-builder-phone-valid .phone-number-input {
+  border-color: #10B981;
+}
+
+.form-builder-phone-invalid .country-dropdown,
+.form-builder-phone-invalid .phone-number-input {
+  border-color: #EF4444;
+}
+
+.form-builder-phone-format-hint {
+  font-size: 0.75rem;
+  color: #6B7280;
+  margin-top: 0.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Number input enhancements */
+.form-builder-number-container {
+  position: relative;
+}
+
+.form-builder-number-validation {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.form-builder-number-validation.valid {
+  color: #10B981;
+}
+
+.form-builder-number-validation.invalid {
+  color: #EF4444;
+}
+
+/* Optimistic update indicators */
+.form-builder-optimistic {
+  position: relative;
+  opacity: 0.8;
+}
+
+.form-builder-optimistic::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #3B82F6, #8B5CF6, #3B82F6);
+  background-size: 200% 100%;
+  animation: form-builder-loading-shimmer 1s infinite;
+  z-index: 1;
+}
+
+.form-builder-saved {
+  opacity: 1;
+}
+
+.form-builder-saved::before {
+  display: none;
+}
+
+/* Enhanced notification styles */
+.form-builder-notification-enter {
+  opacity: 0;
+  transform: translateX(100%) scale(0.95);
+}
+
+.form-builder-notification-enter-active {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.form-builder-notification-exit {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+.form-builder-notification-exit-active {
+  opacity: 0;
+  transform: translateX(100%) scale(0.95);
+  transition: all 0.2s ease-in;
+}
+
+/* Country code dropdown enhancements */
+.form-builder-country-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.form-builder-country-flag {
+  font-size: 1rem;
+  width: 1.25rem;
+  text-align: center;
+}
+
+/* Form validation summary */
+.form-builder-validation-summary {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-builder-validation-summary.warning {
+  background: #FFFBEB;
+  border-color: #FED7AA;
+}
+
+.form-builder-validation-summary.success {
+  background: #F0FDF4;
+  border-color: #BBF7D0;
+}
+
+/* Enhanced button loading states */
+.form-builder-btn-loading {
+  position: relative;
+  color: transparent;
+}
+
+.form-builder-btn-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1rem;
+  height: 1rem;
+  margin: -0.5rem 0 0 -0.5rem;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Enhanced field drag and drop */
+.form-builder-field-dragging {
+  opacity: 0.5;
+  transform: rotate(2deg) scale(1.02);
+  z-index: 1000;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.form-builder-drop-zone {
+  border: 2px dashed #D1D5DB;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  text-align: center;
+  color: #6B7280;
+  transition: all 0.2s ease;
+}
+
+.form-builder-drop-zone.active {
+  border-color: #3B82F6;
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+}
+
+/* Template indicator styles */
+.form-builder-template-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: #F3E8FF;
+  color: #7C3AED;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.form-builder-template-indicator {
+  position: relative;
+}
+
+.form-builder-template-indicator::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #8B5CF6, #EC4899);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.1;
+}
+
+/* Connection status indicator */
+.form-builder-connection-status {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.form-builder-connection-status.online {
+  background: #D1FAE5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+}
+
+.form-builder-connection-status.offline {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FECACA;
+}
+
+/* Enhanced form header */
+.form-builder-header-active {
+  border: 2px solid #3B82F6;
+  border-radius: 0.5rem;
+}
+
+.form-builder-header-inactive {
+  border: 2px dashed #D1D5DB;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.form-builder-header-inactive:hover {
+  border-color: #3B82F6;
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Utility classes */
+.form-builder-text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-builder-shadow-soft {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.form-builder-shadow-medium {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.form-builder-shadow-strong {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}

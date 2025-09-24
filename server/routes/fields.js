@@ -33,82 +33,133 @@ const normalizeFieldType = (type) => {
   
   const typeString = type.toString().toUpperCase().trim();
   
-  // Direct match first
+  // Direct mapping - if it's already a valid backend type, return it
   if (validFieldTypes.includes(typeString)) {
     return typeString;
   }
   
-  // Common aliases
+  // Common aliases mapping to backend types
   const typeMap = {
+    // Text variants
     'TEXT': 'SHORT_ANSWER',
     'INPUT': 'SHORT_ANSWER',
     'TEXTBOX': 'SHORT_ANSWER',
+    'SINGLE_LINE': 'SHORT_ANSWER',
     'SHORT-ANSWER': 'SHORT_ANSWER',
     
+    // Paragraph variants
     'TEXTAREA': 'PARAGRAPH',
     'LONG_TEXT': 'PARAGRAPH',
     'MULTILINE': 'PARAGRAPH',
+    'MULTI_LINE': 'PARAGRAPH',
     'LONG-TEXT': 'PARAGRAPH',
+    'MULTI-LINE': 'PARAGRAPH',
     
+    // Scale variants - CRITICAL FIX
+    'RATING': 'LINEAR_SCALE',
+    'SCALE': 'LINEAR_SCALE',
+    'LIKERT': 'LINEAR_SCALE',
+    'LINEAR-SCALE': 'LINEAR_SCALE',
+    'LINEAR_SCALE': 'LINEAR_SCALE',
+    'LINEARSCALE': 'LINEAR_SCALE',
+    'RATING_SCALE': 'LINEAR_SCALE',
+    'RATING-SCALE': 'LINEAR_SCALE',
+    'STAR_RATING': 'LINEAR_SCALE',
+    'STAR-RATING': 'LINEAR_SCALE',
+    'NUMERIC_SCALE': 'LINEAR_SCALE',
+    'NUMERIC-SCALE': 'LINEAR_SCALE',
+    
+    // Email variants
     'E-MAIL': 'EMAIL',
     'MAIL': 'EMAIL',
+    'EMAIL_ADDRESS': 'EMAIL',
     
+    // Phone variants
     'TEL': 'PHONE',
     'TELEPHONE': 'PHONE',
+    'MOBILE': 'PHONE',
     'PHONE_NUMBER': 'PHONE',
     'PHONE-NUMBER': 'PHONE',
     
+    // URL variants
     'LINK': 'URL',
     'WEBSITE': 'URL',
     'WEB': 'URL',
+    'WEB_LINK': 'URL',
+    'WEB-LINK': 'URL',
+    'URI': 'URL',
     
+    // Number variants
     'NUMERIC': 'NUMBER',
     'INTEGER': 'NUMBER',
     'DECIMAL': 'NUMBER',
+    'FLOAT': 'NUMBER',
+    'NUM': 'NUMBER',
+    'INT': 'NUMBER',
     
+    // Choice variants
     'RADIO': 'MULTIPLE_CHOICE',
     'RADIO_BUTTON': 'MULTIPLE_CHOICE',
+    'RADIO-BUTTON': 'MULTIPLE_CHOICE',
+    'SINGLE_SELECT': 'MULTIPLE_CHOICE',
     'MULTIPLE-CHOICE': 'MULTIPLE_CHOICE',
     
+    // Checkbox variants
     'CHECKBOX': 'CHECKBOXES',
     'CHECK_BOXES': 'CHECKBOXES',
     'CHECK-BOXES': 'CHECKBOXES',
+    'MULTI_SELECT': 'CHECKBOXES',
+    'MULTI-SELECT': 'CHECKBOXES',
     
+    // Dropdown variants
     'SELECT': 'DROPDOWN',
     'DROP_DOWN': 'DROPDOWN',
     'DROP-DOWN': 'DROPDOWN',
+    'PICKER': 'DROPDOWN',
+    'CHOOSER': 'DROPDOWN',
     
+    // File variants
     'FILE': 'FILE_UPLOAD',
     'UPLOAD': 'FILE_UPLOAD',
     'ATTACHMENT': 'FILE_UPLOAD',
+    'DOCUMENT': 'FILE_UPLOAD',
     'FILE-UPLOAD': 'FILE_UPLOAD',
     'FILE_UPLOAD': 'FILE_UPLOAD',
     
-    'RATING': 'LINEAR_SCALE',
-    'SCALE': 'LINEAR_SCALE',
-    'LINEAR-SCALE': 'LINEAR_SCALE',
-    'LINEAR_SCALE': 'LINEAR_SCALE',
-    
+    // Date/Time variants
     'DATETIME': 'DATE_TIME',
+    'TIMESTAMP': 'DATE_TIME',
     'DATE-TIME': 'DATE_TIME',
     'DATE_TIME': 'DATE_TIME',
     
+    // Section variants
     'HEADER': 'SECTION_HEADER',
     'HEADING': 'SECTION_HEADER',
     'SECTION': 'SECTION_HEADER',
+    'BREAK': 'SECTION_HEADER',
+    'DIVIDER': 'SECTION_HEADER',
     'SECTION-HEADER': 'SECTION_HEADER',
     'SECTION_HEADER': 'SECTION_HEADER',
     
+    // Payment variants
     'PAY': 'PAYMENT',
+    'BILLING': 'PAYMENT',
     'CREDIT_CARD': 'PAYMENT',
+    'CREDITCARD': 'PAYMENT',
     
+    // Calculated variants
     'CALC': 'CALCULATED',
-    'FORMULA': 'CALCULATED'
+    'FORMULA': 'CALCULATED',
+    'COMPUTE': 'CALCULATED',
+    'MATH': 'CALCULATED'
   };
-  
+
   const normalizedType = typeMap[typeString] || 'SHORT_ANSWER';
   
-  console.log(`Field type normalized: ${type} → ${normalizedType}`);
+  if (typeString !== normalizedType) {
+    console.log(`Field type normalized: ${type} → ${normalizedType}`);
+  }
+  
   return normalizedType;
 };
 
@@ -212,8 +263,24 @@ const sanitizeFieldData = (fieldData) => {
       break;
       
     case 'LINEAR_SCALE':
-      sanitized.scaleMin = fieldData.scaleMin || 1;
-      sanitized.scaleMax = fieldData.scaleMax || 5;
+      // FIXED: Properly handle LINEAR_SCALE fields
+      sanitized.scaleMin = fieldData.scaleMin !== undefined ? 
+        parseInt(fieldData.scaleMin) || 1 : 1;
+      sanitized.scaleMax = fieldData.scaleMax !== undefined ? 
+        parseInt(fieldData.scaleMax) || 5 : 5;
+      
+      // Ensure valid range
+      if (sanitized.scaleMin >= sanitized.scaleMax) {
+        sanitized.scaleMax = sanitized.scaleMin + 4;
+      }
+      
+      // Add optional labels
+      if (fieldData.scaleMinLabel) {
+        sanitized.scaleMinLabel = fieldData.scaleMinLabel.trim();
+      }
+      if (fieldData.scaleMaxLabel) {
+        sanitized.scaleMaxLabel = fieldData.scaleMaxLabel.trim();
+      }
       break;
       
     case 'PAYMENT':
@@ -283,6 +350,10 @@ router.get('/:formId', async (req, res) => {
         amount: true,
         currency: true,
         conditions: true,
+        scaleMin: true,
+        scaleMax: true,
+        scaleMinLabel: true,
+        scaleMaxLabel: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -372,6 +443,10 @@ router.post('/', async (req, res) => {
         amount: true,
         currency: true,
         conditions: true,
+        scaleMin: true,
+        scaleMax: true,
+        scaleMinLabel: true,
+        scaleMaxLabel: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -409,8 +484,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH route - update field
-router.patch('/:id', async (req, res) => {
+// PUT route - update field
+router.put('/:id', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
@@ -433,8 +508,8 @@ router.patch('/:id', async (req, res) => {
     });
 
     if (!field || field.form.userId !== decoded.userId) {
-      return res.status(403).json({ 
-        error: 'Forbidden: You do not own this field' 
+      return res.status(404).json({ 
+        error: 'Field not found or you do not have permission' 
       });
     }
 
@@ -476,6 +551,10 @@ router.patch('/:id', async (req, res) => {
         amount: true,
         currency: true,
         conditions: true,
+        scaleMin: true,
+        scaleMax: true,
+        scaleMinLabel: true,
+        scaleMaxLabel: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -527,8 +606,8 @@ router.delete('/:id', async (req, res) => {
     });
 
     if (!field || field.form.userId !== decoded.userId) {
-      return res.status(403).json({ 
-        error: 'Forbidden: You do not own this field' 
+      return res.status(404).json({ 
+        error: 'Field not found or you do not have permission' 
       });
     }
 

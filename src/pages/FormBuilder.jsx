@@ -5,7 +5,9 @@ import QuestionLibrary from '../component/QuestionLibrary';
 import HeaderEditor from '../component/HeaderEditor';
 import { EmailRecognitionBanner, useEmailRecognition } from '../component/EmailRecognition';
 import { validateForm } from '../utils/validate';
+import { deleteField as apiDeleteField, updateField as apiUpdateField } from '../api/index';
 import { v4 as uuidv4 } from 'uuid';
+import { isTemplateField, getTemplateFieldStyling } from '../utils/templateUtils';
 import { createForm, updateForm, submitResponse } from '../api/index';
 import {
   Save, Smartphone, Monitor, Type, List, Grid3x3, Calendar, Upload,
@@ -213,7 +215,13 @@ export default function FormBuilder({
   onFieldValueChange,
   clearTemplateState,
   isLoadingTemplate = false,
-  templateFields = null
+  templateFields = null,
+  queryClient, 
+  convertTemplateToRegularFields, 
+  setFields,
+  setIsResetting,
+  setTemplateFields,
+  setIsLoadingTemplateFromFormBuilder,
 }) {
   // Email recognition hook
   const {
@@ -240,6 +248,8 @@ export default function FormBuilder({
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [notification, setNotification] = useState(null);
   const [validationAlert, setValidationAlert] = useState({ show: false, data: {} });
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [touchedFields, setTouchedFields] = useState(new Set());
 
   // Use external props when available, fallback to local state
   const currentPreviewMode = externalPreviewMode !== undefined ? externalPreviewMode : localPreviewMode;
@@ -283,6 +293,14 @@ export default function FormBuilder({
     } else {
       setLocalFormValues(prev => ({ ...prev, [fieldId]: value }));
     }
+    
+    // Track user interaction
+    if (!hasUserInteracted) {
+      setHasUserInteracted(true);
+    }
+    
+    // Track which fields have been touched
+    setTouchedFields(prev => new Set([...prev, fieldId]));
     
     // Clear errors for this field when value changes
     if (formErrors[fieldId]) {
@@ -444,27 +462,72 @@ export default function FormBuilder({
       };
 
       let response;
+      let isNewForm = !isFormSaved || !formData.id;
+
       if (isFormSaved && formData.id) {
         response = await updateForm(formData.id, formPayload);
         showNotification('Form updated successfully!', 'success');
       } else {
         response = await createForm(formPayload);
-        if (response.data?.id) {
-          setFormData(prev => ({ ...prev, id: response.data.id }));
-        }
-        setIsFormSaved(true);
         showNotification('Form created successfully!', 'success');
       }
 
+      if (templateFields && templateFields.length > 0 && convertTemplateToRegularFields) {
+        await convertTemplateToRegularFields();
+      }
+
+      setIsResetting(true);
+
+      setFormData({
+        id: isNewForm ? response.data.id : formData.id,
+        title: 'Untitled Form',
+        description: '',
+        headerImage: null,
+        backgroundColor: '#ffffff',
+        accentColor: '#4285f4',
+        logo: null,
+        settings: {
+          collectEmails: false,
+          requireLogin: false,
+          limitResponses: false,
+          maxResponses: '',
+          allowMultiple: true,
+          showProgressBar: true,
+          shuffleQuestions: false,
+          consentRequired: true,
+          language: 'en',
+          confirmationMessage: 'Thank you! Your response has been recorded.',
+          redirectUrl: '',
+          customBranding: true,
+          theme: 'blue'
+        }
+      });
+
+      if (typeof setFields === 'function') {
+        setFields([]);
+      }
+      if (typeof setTemplateFields === 'function') {
+        setTemplateFields(null);
+      }
+      if (typeof setIsLoadingTemplateFromFormBuilder === 'function') {
+        setIsLoadingTemplateFromFormBuilder(false);
+      }
+
+      queryClient.invalidateQueries(['fields', formData.id]);
+      queryClient.invalidateQueries(['forms']);
+
+      setIsFormSaved(true);
       setSaveStatus('success');
+      setActiveField(null);
+      setFormValues({});
+
+      setTimeout(() => setIsResetting(false), 100);
+
       console.log('Form saved successfully:', response.data);
-      
     } catch (error) {
       setSaveStatus('error');
       console.error('Error saving form:', error);
-      
       let errorMessage = 'Failed to save form. Please try again.';
-      
       if (error.response?.status === 400) {
         errorMessage = 'Invalid form data. Please check your fields.';
       } else if (error.response?.status === 413) {
@@ -472,7 +535,6 @@ export default function FormBuilder({
       } else if (error.response?.status === 403) {
         errorMessage = 'Permission denied. Please check your access rights.';
       }
-      
       showNotification(errorMessage, 'error');
     } finally {
       setIsSaving(false);
@@ -480,18 +542,175 @@ export default function FormBuilder({
     }
   };
 
+  const resetForm = () => {
+    // Reset form values
+    if (onFieldValueChange) {
+      fields.forEach(field => {
+        onFieldValueChange(field.id, '');
+      });
+    } else {
+      setLocalFormValues({});
+    }
+    
+    // Reset formData to initial state
+    setFormData({
+      id: formData.id, // Preserve the form ID
+      title: 'Untitled Form',
+      description: '',
+      headerImage: null,
+      backgroundColor: '#ffffff',
+      accentColor: '#4285f4',
+      logo: null,
+      settings: {
+        collectEmails: false,
+        requireLogin: false,
+        limitResponses: false,
+        maxResponses: '',
+        allowMultiple: true,
+        showProgressBar: true,
+        shuffleQuestions: false,
+        consentRequired: true,
+        language: 'en',
+        confirmationMessage: 'Thank you! Your response has been recorded.',
+        redirectUrl: '',
+        customBranding: true,
+        theme: 'blue'
+      }
+    });
+
+    // Reset fields
+    if (typeof setFields === 'function') {
+      setFields([]);
+    }
+    
+    setFormErrors({});
+    setActiveField(null);
+    showNotification('Form reset successfully.', 'info');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Enhanced handlers with notifications
   const handleAddField = (type) => {
     if (addField) {
-      if (clearTemplateState && templateFields) {
-        clearTemplateState();
-        showNotification('Template cleared. Added custom field.', 'info');
-      }
-      
       addField(type);
-      showNotification(`${type.replace('_', ' ').toLowerCase()} field added successfully!`, 'success');
+      
+      // Show appropriate notification based on template state
+      if (templateFields && templateFields.length > 0) {
+        showNotification(`${type.replace('_', ' ').toLowerCase()} field added to template!`, 'success');
+      } else {
+        showNotification(`${type.replace('_', ' ').toLowerCase()} field added successfully!`, 'success');
+      }
     }
     setShowFieldTypes(false);
+  };
+
+  const handleDeleteField = async (fieldIdToDelete) => {
+    try {
+      console.log('=== DELETE FIELD DEBUG ===');
+      console.log('Field ID to delete:', fieldIdToDelete);
+      console.log('All fields:', fields.map(f => ({ id: f.id, question: f.question?.substring(0, 30) })));
+      console.log('Template fields count:', templateFields?.length || 0);
+      
+      // Find the field to delete
+      const fieldToDelete = fields.find(f => f.id == fieldIdToDelete); // Use == for loose comparison
+      if (!fieldToDelete) {
+        console.error('Field not found in fields array');
+        showNotification('Field not found - cannot delete', 'error');
+        return;
+      }
+      
+      console.log('Found field to delete:', {
+        id: fieldToDelete.id,
+        question: fieldToDelete.question,
+        isTemplate: isTemplateField(fieldToDelete, templateFields || [])
+      });
+      
+      // Convert to string for consistent validation
+      const fieldIdString = String(fieldIdToDelete);
+      
+      // Validate field ID (allow numbers and strings, but not undefined/null/empty)
+      if (fieldIdToDelete == null || 
+          fieldIdString === 'undefined' || 
+          fieldIdString === 'name' ||
+          fieldIdString.trim() === '') {
+        console.error('Invalid field ID for deletion:', fieldIdToDelete);
+        showNotification('Cannot delete field: Invalid field ID', 'error');
+        return;
+      }
+
+      // Handle template fields differently
+      if (isTemplateField(fieldToDelete, templateFields || [])) {
+        console.log('Deleting template field - removing from local state only');
+        
+        // Remove from template fields array
+        if (templateFields && setTemplateFields) {
+          const updatedTemplateFields = templateFields.filter(tf => tf.id != fieldIdToDelete);
+          setTemplateFields(updatedTemplateFields);
+          console.log('Updated template fields count:', updatedTemplateFields.length);
+        }
+        
+        // Remove from regular fields array
+        if (setFields) {
+          const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
+          setFields(updatedFields);
+          console.log('Updated fields count:', updatedFields.length);
+        }
+        
+        showNotification('Template field removed successfully', 'success');
+      } else {
+        // For regular saved fields, call the API
+        console.log('Deleting regular field via API');
+        
+        if (typeof deleteField === 'function') {
+          await deleteField(fieldIdToDelete);
+          console.log('API delete successful');
+          showNotification('Field deleted successfully', 'success');
+        } else {
+          console.warn('deleteField function not available, using API directly');
+          await apiDeleteField(fieldIdToDelete);
+          
+          // Update local state
+          if (setFields) {
+            const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
+            setFields(updatedFields);
+          }
+          
+          showNotification('Field deleted successfully', 'success');
+        }
+      }
+
+      // Clear active field if it was the deleted one
+      if (activeField == fieldIdToDelete) {
+        setActiveField(null);
+      }
+      
+      console.log('=== DELETE FIELD COMPLETE ===');
+
+    } catch (error) {
+      console.error('Error in handleDeleteField:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      let errorMessage = 'Failed to delete field';
+      
+      if (error.message?.includes('Invalid field ID')) {
+        errorMessage = 'Cannot delete field: Invalid identifier';
+      } else if (error.response?.status === 400) {
+        errorMessage = 'Bad request - field may not exist';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Field not found - may have been already deleted';
+        // If 404, remove from local state anyway
+        if (setFields) {
+          const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
+          setFields(updatedFields);
+        }
+      }
+      
+      showNotification(errorMessage, 'error');
+    }
   };
 
   const handleColorChange = (newColor) => {
@@ -517,12 +736,14 @@ export default function FormBuilder({
       setLocalFormValues({});
     }
     setFormErrors({});
+    resetForm();
     setShowSuccessModal(false);
     showNotification('Form cleared and ready for new response.', 'success');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCloseSuccess = () => {
+    resetForm();
     setShowSuccessModal(false);
     setCurrentPreviewMode(false);
     if (onFieldValueChange) {
@@ -536,12 +757,26 @@ export default function FormBuilder({
     showNotification('Returned to form builder.', 'info');
   };
 
-  // Rest of helper functions remain the same...
-  const addFieldFromLibrary = (templateField) => {
-    if (addField) {
-      addField(templateField.type);
-      showNotification('Field added from library!', 'success');
-    }
+  const addFieldFromLibrary = (template) => {
+    const formId = parseInt(formData.id, 10);
+    const newField = {
+      id: uuidv4(),
+      formId: isNaN(formId) ? null : formId, // Will be updated by addField if null
+      type: template.type.toUpperCase().replace('-', '_'),
+      question: template.question || `New ${template.type.toLowerCase().replace('-', ' ')} question`,
+      required: template.required || false,
+      options: template.options ? template.options.map(opt => ({
+        id: uuidv4(),
+        value: opt.value,
+        score: 0
+      })) : null,
+      validations: template.required ? [{ type: 'required' }] : [],
+      description: template.description || '',
+      index: fields.length + 1,
+      isTemplateField: true
+    };
+    console.log('Adding field from library:', newField);
+    addField(newField.type, newField);
   };
 
   const exportForm = () => {
@@ -604,7 +839,15 @@ export default function FormBuilder({
 
   // Enhanced preview mode with validation indicators
   if (currentPreviewMode) {
-    const validation = validateForm(fields, currentFormValues);
+    // Only validate after user has attempted to submit or interacted with fields
+    const hasUserInteracted = Object.keys(currentFormValues).length > 0;
+    const validation = hasUserInteracted ? validateForm(fields, currentFormValues) : { hasErrors: false, errors: {} };
+    
+    // Count only non-section fields for display
+    const actualFormFields = fields.filter(field => field.type !== 'SECTION_HEADER');
+    const requiredFields = actualFormFields.filter(field => 
+      field.validations?.some(v => v.type === 'required') || field.required
+    );
     
     return (
       <div className="min-h-screen bg-gray-50">
@@ -628,7 +871,12 @@ export default function FormBuilder({
               </button>
               <div className="w-px h-6 bg-gray-300" />
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>{fields.length} field{fields.length !== 1 ? 's' : ''}</span>
+                <span>
+                  {actualFormFields.length} field{actualFormFields.length !== 1 ? 's' : ''}
+                  {requiredFields.length > 0 && (
+                    <span className="text-gray-500"> ({requiredFields.length} required)</span>
+                  )}
+                </span>
                 {validation.hasErrors && (
                   <span className="text-red-600 font-medium">
                     • {Object.keys(validation.errors).length} error{Object.keys(validation.errors).length !== 1 ? 's' : ''}
@@ -639,18 +887,29 @@ export default function FormBuilder({
             
             <button
               onClick={handleSubmit}
-              disabled={!isOnline || validation.hasErrors}
+              disabled={!isOnline}
               className={`flex items-center gap-2 px-4 lg:px-6 py-3 rounded-lg transition-colors font-semibold shadow-lg text-sm lg:text-base ${
-                !isOnline || validation.hasErrors
+                !isOnline
                   ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : validation.hasErrors && hasUserInteracted
+                  ? 'bg-orange-500 text-white hover:bg-orange-600'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
               style={{ 
-                backgroundColor: !isOnline || validation.hasErrors ? undefined : formData.accentColor 
+                backgroundColor: !isOnline 
+                  ? undefined 
+                  : validation.hasErrors && hasUserInteracted
+                  ? undefined
+                  : formData.accentColor 
               }}
             >
               <Send className="w-4 h-4 lg:w-5 lg:h-5" />
-              {!isOnline ? 'Connection Required' : validation.hasErrors ? 'Complete Required Fields' : 'Submit Form'}
+              {!isOnline 
+                ? 'Connection Required' 
+                : validation.hasErrors && hasUserInteracted
+                ? `Fix ${Object.keys(validation.errors).length} Error${Object.keys(validation.errors).length !== 1 ? 's' : ''}`
+                : 'Submit Form'
+              }
             </button>
           </div>
         </div>
@@ -695,6 +954,9 @@ export default function FormBuilder({
                     previewMode={true}
                     formData={formData}
                     formErrors={formErrors}
+                    isTemplateField={false} // Always false in preview mode
+                    templateFields={templateFields} 
+                    deleteField={handleDeleteField}
                   />
                 ))}
                 
@@ -729,13 +991,13 @@ export default function FormBuilder({
                       <button
                         type="submit"
                         onClick={handleSubmit}
-                        disabled={!isOnline || validation.hasErrors}
+                        disabled={!isOnline}
                         className={`px-8 py-3 rounded-lg transition-all font-semibold shadow-lg flex items-center gap-2 ${
-                          !isOnline || validation.hasErrors
+                          !isOnline
                             ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
                             : 'text-white hover:opacity-90'
                         }`}
-                        style={{ backgroundColor: (!isOnline || validation.hasErrors) ? undefined : formData.accentColor }}
+                        style={{ backgroundColor: (!isOnline) ? undefined : formData.accentColor }}
                       >
                         <Send className="w-5 h-5" />
                         Submit Form
@@ -915,6 +1177,9 @@ export default function FormBuilder({
                           onClick={() => {
                             if (deleteField) {
                               deleteField(field.id);
+                              if (activeField === field.id) {
+                                setActiveField(null);
+                              }
                               showNotification('Field deleted successfully.', 'info');
                             }
                           }}
@@ -1009,7 +1274,7 @@ export default function FormBuilder({
         </div>
 
         {/* Enhanced fields list */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 overflow-y-auto p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Form Fields</h3>
             {templateFields && clearTemplateState && (
@@ -1077,6 +1342,9 @@ export default function FormBuilder({
                             e.stopPropagation();
                             if (deleteField) {
                               deleteField(field.id);
+                              if (activeField === field.id) {
+                                setActiveField(null);
+                              }
                               showNotification('Field deleted.', 'info');
                             }
                           }}
@@ -1132,11 +1400,18 @@ export default function FormBuilder({
 
       {/* Main Content Area - Enhanced */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+        {/* top bar */}
         <div className="bg-white border-b shadow-sm">
-          <div className="px-4 lg:px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-2 lg:gap-4">
-              <h2 className="text-lg lg:text-xl font-bold text-gray-800 truncate">{formData.title}</h2>
-              <div className="flex items-center gap-2">
+          <div className="px-4 lg:px-6 py-4 flex items-center justify-between gap-4">
+            {/* Left section with title and controls - flex-1 to take available space */}
+            <div className="flex items-center gap-2 lg:gap-4 flex-1 min-w-0">
+              {/* Title with proper truncation */}
+              <h2 className="text-lg lg:text-xl font-bold text-gray-800 truncate flex-shrink min-w-0 max-w-xs lg:max-w-md">
+                {formData.title}
+              </h2>
+              
+              {/* Controls section */}
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {!isOnline && (
                   <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
                     <WifiOff className="w-3 h-3" />
@@ -1166,7 +1441,8 @@ export default function FormBuilder({
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            {/* Right section - flex-shrink-0 to prevent shrinking */}
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => setCurrentShowShareModal(true)}
                 className="flex items-center gap-1 lg:gap-2 px-3 lg:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm lg:text-base"
@@ -1263,7 +1539,7 @@ export default function FormBuilder({
                       <div className="flex items-center gap-2">
                         <Star className="w-5 h-5 text-purple-600" />
                         <span className="text-sm font-medium text-purple-800">
-                          Template fields loaded ({templateFields.length} fields)
+                          Template fields loaded ({templateFields.length} fields) - All fields are editable
                         </span>
                       </div>
                       {clearTemplateState && (
@@ -1278,6 +1554,9 @@ export default function FormBuilder({
                         </button>
                       )}
                     </div>
+                    <p className="text-xs text-purple-600 mt-2">
+                      You can edit any template field by clicking on it. Changes are saved automatically.
+                    </p>
                   </div>
                 )}
 
@@ -1288,12 +1567,16 @@ export default function FormBuilder({
                       activeField={activeField}
                       setActiveField={setActiveField}
                       updateField={updateField}
+                      deleteField={handleDeleteField}
+                      duplicateField={duplicateField}
                       formValues={currentFormValues}
                       onFieldValueChange={handleFieldValueChange}
                       accentColor={formData.accentColor}
                       previewMode={false}
                       formData={formData}
                       formErrors={formErrors}
+                      isTemplateField={isTemplateField(field, templateFields || [])}
+                      templateFields={templateFields} 
                     />
                   </div>
                 ))}
