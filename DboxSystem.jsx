@@ -358,7 +358,7 @@ const fieldTypes = [
     }
   });
 
-  const sanitizeFieldForAPI = (fieldData) => {
+ const sanitizeFieldForAPI = (fieldData) => {
   if (!fieldData || typeof fieldData !== 'object') {
     console.warn('Invalid field data provided to sanitizeFieldForAPI:', fieldData);
     return {};
@@ -371,7 +371,6 @@ const fieldTypes = [
 
   // Required fields
   if (fieldData.formId !== undefined && fieldData.formId !== null) {
-    // Ensure formId is always an integer
     const formIdNum = parseInt(fieldData.formId, 10);
     if (!isNaN(formIdNum)) {
       sanitized.formId = formIdNum;
@@ -395,12 +394,10 @@ const fieldTypes = [
     }
   });
 
-  // Boolean fields
-  ['required'].forEach(field => {
-    if (typeof fieldData[field] === 'boolean') {
-      sanitized[field] = fieldData[field];
-    }
-  });
+  // FIXED: Boolean fields - Handle required properly
+  if (typeof fieldData.required === 'boolean') {
+    sanitized.required = fieldData.required;
+  }
 
   // Numeric fields with validation
   ['index', 'amount', 'points', 'scaleMin', 'scaleMax', 'maxFileSize'].forEach(field => {
@@ -437,7 +434,6 @@ const fieldTypes = [
       })
       .filter(option => option.value && option.value.length > 0);
     
-    // Ensure we have at least one option for choice fields
     if (['MULTIPLE_CHOICE', 'CHECKBOXES', 'DROPDOWN'].includes(sanitized.type) && 
         sanitized.options.length === 0) {
       sanitized.options = [
@@ -447,24 +443,46 @@ const fieldTypes = [
     }
   }
 
-  // Handle validations array
+  // CRITICAL FIX: Handle validations array properly
   if (fieldData.validations && Array.isArray(fieldData.validations)) {
     const validValidations = fieldData.validations
-      .filter(v => v && v.type && typeof v.type === 'string');
+      .filter(v => v && typeof v === 'object' && v.type && typeof v.type === 'string')
+      .map(v => {
+        const validation = { type: v.type };
+        
+        // Only add properties that exist and are not undefined
+        if (v.value !== undefined && v.value !== null) validation.value = v.value;
+        if (v.message && typeof v.message === 'string') validation.message = v.message;
+        if (v.min !== undefined && typeof v.min === 'number') validation.min = v.min;
+        if (v.max !== undefined && typeof v.max === 'number') validation.max = v.max;
+        if (v.minLength !== undefined && typeof v.minLength === 'number') validation.minLength = v.minLength;
+        if (v.maxLength !== undefined && typeof v.maxLength === 'number') validation.maxLength = v.maxLength;
+        if (v.pattern && typeof v.pattern === 'string') validation.pattern = v.pattern;
+        
+        return validation;
+      });
+    
     if (validValidations.length > 0) {
       sanitized.validations = validValidations;
     }
   }
 
-  // Add required validation if field is marked as required
+  // CRITICAL FIX: Ensure required validation consistency
   if (sanitized.required && (!sanitized.validations || !sanitized.validations.some(v => v.type === 'required'))) {
     sanitized.validations = [...(sanitized.validations || []), { type: 'required' }];
+  }
+
+  // Remove required validation if field is not required
+  if (!sanitized.required && sanitized.validations) {
+    sanitized.validations = sanitized.validations.filter(v => v.type !== 'required');
+    if (sanitized.validations.length === 0) {
+      delete sanitized.validations;
+    }
   }
 
   // Type-specific field sanitization
   switch (sanitized.type) {
     case 'LINEAR_SCALE':
-      // Ensure scale values are valid
       if (!sanitized.scaleMin) sanitized.scaleMin = 1;
       if (!sanitized.scaleMax) sanitized.scaleMax = 5;
       if (sanitized.scaleMax <= sanitized.scaleMin) {
@@ -474,7 +492,11 @@ const fieldTypes = [
     
     case 'FILE_UPLOAD':
       if (!sanitized.maxFileSize) sanitized.maxFileSize = 10;
-      if (!fieldData.acceptedTypes) sanitized.acceptedTypes = 'image/*,application/pdf';
+      if (fieldData.acceptedTypes && typeof fieldData.acceptedTypes === 'string') {
+        sanitized.acceptedTypes = fieldData.acceptedTypes;
+      } else {
+        sanitized.acceptedTypes = 'image/*,application/pdf';
+      }
       if (typeof fieldData.allowMultiple === 'boolean') {
         sanitized.allowMultiple = fieldData.allowMultiple;
       }
@@ -482,7 +504,11 @@ const fieldTypes = [
     
     case 'PAYMENT':
       if (!sanitized.amount) sanitized.amount = 0;
-      if (!fieldData.currency) sanitized.currency = 'USD';
+      if (fieldData.currency && typeof fieldData.currency === 'string') {
+        sanitized.currency = fieldData.currency;
+      } else {
+        sanitized.currency = 'USD';
+      }
       break;
     
     case 'SECTION_HEADER':
@@ -508,7 +534,7 @@ const fieldTypes = [
 
   console.log('Field sanitization complete:', sanitized);
   return sanitized;
-};
+}
 
   // UPDATED: Improved template handler function
 const handleUseTemplate = (templateData) => {
@@ -1031,6 +1057,10 @@ const updateFieldMutation = useMutation({
   mutationFn: async ({ id, updatedField }) => {
     const fieldId = String(id);
     
+    console.log('=== API MUTATION START ===');
+    console.log('Field ID:', fieldId);
+    console.log('Payload:', JSON.stringify(updatedField, null, 2));
+    
     // Find field in current state
     const fieldInState = fields.find(f => f.id == fieldId);
     if (!fieldInState) {
@@ -1039,37 +1069,34 @@ const updateFieldMutation = useMutation({
     
     // Skip API for template fields
     if (fieldInState.isTemplateField || fieldId.includes('template_')) {
+      console.log('Template field - returning local update only');
       return { ...fieldInState, ...updatedField };
     }
     
-    const backendSafeData = {
-      ...sanitizeFieldData(updatedField),
-      formId: parseInt(formData.id, 10),
-    };
-    
-    // Remove undefined properties
-    Object.keys(backendSafeData).forEach(key => {
-      if (backendSafeData[key] === undefined) {
-        delete backendSafeData[key];
-      }
-    });
-    
     try {
-      // Single API call - if it fails, the field doesn't exist
-      const response = await api.put(`/fields/${fieldId}`, backendSafeData);
+      console.log('Making PUT request to:', `/fields/${fieldId}`);
+      const response = await api.put(`/fields/${fieldId}`, updatedField);
+      console.log('=== API MUTATION SUCCESS ===');
+      console.log('Response:', response.data);
       return response.data;
     } catch (error) {
+      console.log('=== API MUTATION ERROR ===');
+      console.error('API Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      
       if (error.response?.status === 404) {
         console.warn(`Field ${fieldId} not found on server, removing from local state`);
-        
-        // Remove from local state immediately
         setFields(prev => prev.filter(f => f.id != fieldId));
         if (activeField === fieldId) {
           setActiveField(null);
         }
-        
-        return null; // Indicate field was removed
+        return null;
       }
+      
       throw error;
     }
   },
@@ -1078,6 +1105,8 @@ const updateFieldMutation = useMutation({
       console.log('Field removed from state due to 404');
       return;
     }
+    
+    console.log('Field update successful:', updatedField);
     
     // Update query cache
     if (updatedField && updatedField.id && formData.id) {
@@ -1091,12 +1120,38 @@ const updateFieldMutation = useMutation({
   onError: (error, { id }) => {
     console.error('Field update failed:', error);
     
-    // Only show user errors for unexpected failures
-    if (!error.message.includes('not found') && error.response?.status !== 404) {
-      setError(`Failed to update field: ${error.message}`);
+    let errorMessage = 'Failed to update field. ';
+    
+    if (error.response?.status === 400) {
+      const errorData = error.response.data;
+      if (typeof errorData === 'string') {
+        errorMessage += errorData;
+      } else if (errorData?.message) {
+        errorMessage += errorData.message;
+      } else if (errorData?.error) {
+        errorMessage += errorData.error;
+      } else {
+        errorMessage += 'Invalid field data. Please check validation settings.';
+      }
+    } else if (error.response?.status === 500) {
+      errorMessage += 'Server error. This may be due to validation format issues.';
+    } else if (error.message?.includes('not found')) {
+      // Don't show error for 404s, we handle them above
+      return;
+    } else {
+      errorMessage += error.message || 'Unknown error occurred.';
     }
+    
+    setError(errorMessage);
   },
-  retry: false // No retries - fail fast
+  retry: (failureCount, error) => {
+    // Don't retry validation errors (400) or not found (404)
+    if (error?.response?.status === 400 || error?.response?.status === 404) {
+      return false;
+    }
+    // Retry server errors (500) once
+    return failureCount < 1;
+  }
 });
 
 
@@ -1443,6 +1498,11 @@ const updateField = (fieldId, updates) => {
     return;
   }
   
+  console.log('=== FIELD UPDATE START ===');
+  console.log('Field ID:', fieldId);
+  console.log('Updates:', updates);
+  console.log('Current field:', currentField);
+  
   // ALWAYS update local state immediately for UI responsiveness
   setFields(prev => prev.map(field => 
     field.id == fieldId ? { ...field, ...updates } : field
@@ -1454,22 +1514,24 @@ const updateField = (fieldId, updates) => {
       fieldIdString.includes('field_') ||
       !currentField.formId) {
     console.log('Local field update only - no API sync needed');
+    console.log('=== FIELD UPDATE END (LOCAL ONLY) ===');
     return;
   }
   
   // CRITICAL: Only sync to API if we have a valid form ID
   if (!formData.id) {
     console.warn('No form ID available for API sync');
+    console.log('=== FIELD UPDATE END (NO FORM ID) ===');
     return;
   }
   
-  // Debounced API sync with validation
+  // Debounced API sync with enhanced validation
   if (updateField.timeout) {
     clearTimeout(updateField.timeout);
   }
   
   updateField.timeout = setTimeout(() => {
-    console.log('Syncing field update to API for field:', fieldId);
+    console.log('Starting API sync for field:', fieldId);
     
     // Double-check field still exists before API call
     const stillExists = fields.find(f => f.id == fieldId);
@@ -1478,11 +1540,29 @@ const updateField = (fieldId, updates) => {
       return;
     }
     
-    updateFieldMutation.mutate({ 
-      id: fieldId, 
-      updatedField: sanitizeFieldData(updates) 
-    });
-  }, 800); // Increased debounce time
+    try {
+      // Create the complete field object for API
+      const updatedFieldData = { ...currentField, ...updates };
+      
+      console.log('Complete field data for API:', updatedFieldData);
+      
+      const sanitizedData = sanitizeFieldForAPI(updatedFieldData);
+      
+      console.log('Sanitized API payload:', JSON.stringify(sanitizedData, null, 2));
+      
+      updateFieldMutation.mutate({ 
+        id: fieldId, 
+        updatedField: sanitizedData
+      });
+      
+      console.log('=== FIELD UPDATE END (API CALLED) ===');
+      
+    } catch (error) {
+      console.error('Error preparing field update:', error);
+      setError(`Failed to prepare field update: ${error.message}`);
+      console.log('=== FIELD UPDATE END (ERROR) ===');
+    }
+  }, 800);
 };
 
 

@@ -287,36 +287,38 @@ export default function FormBuilder({
   }, [currentEmail, currentPreviewMode, fields, onFieldValueChange]);
 
   // Enhanced field value change handler with real-time validation
-  const handleFieldValueChange = (fieldId, value) => {
-    if (onFieldValueChange) {
-      onFieldValueChange(fieldId, value);
-    } else {
-      setLocalFormValues(prev => ({ ...prev, [fieldId]: value }));
-    }
-    
-    // Track user interaction
-    if (!hasUserInteracted) {
-      setHasUserInteracted(true);
-    }
-    
-    // Track which fields have been touched
-    setTouchedFields(prev => new Set([...prev, fieldId]));
-    
-    // Clear errors for this field when value changes
-    if (formErrors[fieldId]) {
-      setFormErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[fieldId];
-        return newErrors;
-      });
-    }
-    
-    // Handle email field changes
-    const field = fields.find(f => f.id === fieldId);
-    if (field && (field.type === 'EMAIL' || field.type === 'email')) {
-      handleEmailFieldChange(fieldId, value);
-    }
-  };
+ const handleFieldValueChange = (fieldId, value) => {
+  console.log('Field value change:', { fieldId, value });
+  
+  if (onFieldValueChange) {
+    onFieldValueChange(fieldId, value);
+  } else {
+    setLocalFormValues(prev => ({ ...prev, [fieldId]: value }));
+  }
+  
+  // Track user interaction
+  if (!hasUserInteracted) {
+    setHasUserInteracted(true);
+  }
+  
+  // Track which fields have been touched
+  setTouchedFields(prev => new Set([...prev, fieldId]));
+  
+  // Clear errors for this field when value changes and field now has value
+  if (formErrors[field.id] && value && (typeof value !== 'string' || value.trim() !== '')) {
+    setFormErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[fieldId];
+      return newErrors;
+    });
+  }
+  
+  // Handle email field changes
+  const field = fields.find(f => f.id === fieldId);
+  if (field && (field.type === 'EMAIL' || field.type === 'email')) {
+    handleEmailFieldChange(fieldId, value);
+  }
+};
 
   // Enhanced email field handling with professional feedback
   const handleEmailFieldChange = (fieldId, email) => {
@@ -334,101 +336,203 @@ export default function FormBuilder({
     }
   };
 
+
   // Professional form validation with detailed feedback
-  const validateFormWithFeedback = () => {
-    const validation = validateForm(fields, currentFormValues);
+const validateFormWithFeedback = () => {
+  console.log('=== VALIDATION START ===');
+  console.log('Fields to validate:', fields.length);
+  console.log('Current form values:', Object.keys(currentFormValues).length);
+  
+  const errors = {};
+  let hasErrors = false;
+  
+  // Filter out section headers from validation
+  const validatableFields = fields.filter(field => 
+    field && field.type !== 'SECTION_HEADER' && field.id
+  );
+  
+  console.log('Validatable fields:', validatableFields.length);
+  
+  validatableFields.forEach(field => {
+    // FIXED: Check if field is required using both validation array and required property
+    const isRequired = (field.validations && Array.isArray(field.validations) && 
+      field.validations.some(v => v && v.type === 'required')) || field.required === true;
     
-    if (validation.hasErrors) {
-      setFormErrors(validation.errors);
+    const fieldValue = currentFormValues[field.id];
+    
+    console.log(`Checking field ${field.id}:`, {
+      type: field.type,
+      required: isRequired,
+      hasValue: !!fieldValue,
+      value: fieldValue
+    });
+    
+    if (isRequired) {
+      let isEmpty = false;
       
-      const errorCount = Object.keys(validation.errors).length;
-      const fieldNames = Object.keys(validation.errors).map(fieldId => {
-        const field = fields.find(f => f.id === fieldId);
-        return field?.question || 'Unnamed field';
-      }).slice(0, 3);
+      switch (field.type?.toUpperCase()) {
+        case 'CHECKBOXES':
+          isEmpty = !Array.isArray(fieldValue) || fieldValue.length === 0;
+          break;
+        case 'FILE_UPLOAD':
+          isEmpty = !fieldValue;
+          break;
+        case 'LINEAR_SCALE':
+          isEmpty = !fieldValue || fieldValue === '' || fieldValue === null;
+          break;
+        case 'MULTIPLE_CHOICE':
+        case 'DROPDOWN':
+          isEmpty = !fieldValue || fieldValue === '';
+          break;
+        default:
+          isEmpty = !fieldValue || (typeof fieldValue === 'string' && fieldValue.trim() === '');
+          break;
+      }
       
-      const fieldList = fieldNames.length > 2 
-        ? `${fieldNames.slice(0, -1).join(', ')}, and ${fieldNames.slice(-1)[0]}`
-        : fieldNames.join(' and ');
-      
-      setValidationAlert({
-        show: true,
-        data: {
-          title: 'Form Validation Required',
-          message: `Please complete the following required field${errorCount > 1 ? 's' : ''}: ${fieldList}${errorCount > 3 ? ` and ${errorCount - 3} more` : ''}.`,
-          type: 'warning'
-        }
-      });
-      
-      return false;
+      if (isEmpty) {
+        const fieldName = field.question || 'This field';
+        errors[field.id] = [`${fieldName} is required`];
+        hasErrors = true;
+        console.log(`Field ${field.id} failed validation: required but empty`);
+      }
     }
     
-    setFormErrors({});
-    return true;
-  };
+    // Additional type-specific validations for non-empty values
+    if (fieldValue && typeof fieldValue === 'string' && fieldValue.trim() !== '') {
+      switch (field.type?.toUpperCase()) {
+        case 'EMAIL':
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue.trim())) {
+            errors[field.id] = ['Please enter a valid email address'];
+            hasErrors = true;
+          }
+          break;
+        case 'URL':
+          try {
+            new URL(fieldValue.trim());
+          } catch {
+            errors[field.id] = ['Please enter a valid URL'];
+            hasErrors = true;
+          }
+          break;
+        case 'NUMBER':
+          if (isNaN(Number(fieldValue.trim()))) {
+            errors[field.id] = ['Please enter a valid number'];
+            hasErrors = true;
+          }
+          break;
+      }
+    }
+  });
+  
+  console.log('=== VALIDATION END ===');
+  console.log('Has errors:', hasErrors);
+  console.log('Error count:', Object.keys(errors).length);
+  
+  if (hasErrors) {
+    setFormErrors(errors);
+    
+    const errorCount = Object.keys(errors).length;
+    const fieldNames = Object.keys(errors).map(fieldId => {
+      const field = fields.find(f => f.id === fieldId);
+      return field?.question || 'Unnamed field';
+    }).slice(0, 3);
+    
+    const fieldList = fieldNames.length > 2 
+      ? `${fieldNames.slice(0, -1).join(', ')}, and ${fieldNames.slice(-1)[0]}`
+      : fieldNames.join(' and ');
+    
+    setValidationAlert({
+      show: true,
+      data: {
+        title: 'Form Validation Required',
+        message: `Please complete the following required field${errorCount > 1 ? 's' : ''}: ${fieldList}${errorCount > 3 ? ` and ${errorCount - 3} more` : ''}.`,
+        type: 'warning'
+      }
+    });
+    
+    // Scroll to first error
+    const firstErrorFieldId = Object.keys(errors)[0];
+    const firstErrorElement = document.querySelector(`[data-field-id="${firstErrorFieldId}"]`);
+    if (firstErrorElement) {
+      firstErrorElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }
+    
+    return false;
+  }
+  
+  setFormErrors({});
+  return true;
+};
 
   // Enhanced submit handler with professional error handling
-  const handleSubmit = async () => {
-    if (!validateFormWithFeedback()) {
-      return;
-    }
+ const handleSubmit = async () => {
+  console.log('=== FORM SUBMIT START ===');
+  
+  // Use your existing validateFormWithFeedback function
+  if (!validateFormWithFeedback()) {
+    console.log('Form validation failed - stopping submission');
+    return;
+  }
 
-    if (!isOnline) {
-      showNotification('Please check your internet connection and try again.', 'error');
-      return;
-    }
+  if (!isOnline) {
+    showNotification('Please check your internet connection and try again.', 'error');
+    return;
+  }
 
-    try {
-      showNotification('Submitting your response...', 'info');
-      
-      const emailField = fields.find(f => f.type === 'EMAIL' || f.type === 'email');
-      const email = emailField ? currentFormValues[emailField.id] : null;
+  try {
+    showNotification('Submitting your response...', 'info');
+    
+    const emailField = fields.find(f => f.type === 'EMAIL' || f.type === 'email');
+    const email = emailField ? currentFormValues[emailField.id] : null;
 
-      // Enhanced email recognition
-      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        const isAlreadyRecognized = recognizedEmails.some(e => e.email === email);
-        if (!isAlreadyRecognized) {
-          addEmail(email);
-        } else {
-          const existingEmail = recognizedEmails.find(e => e.email === email);
-          if (existingEmail) {
-            switchToEmail(existingEmail);
-          }
+    // Enhanced email recognition
+    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      const isAlreadyRecognized = recognizedEmails.some(e => e.email === email);
+      if (!isAlreadyRecognized) {
+        addEmail(email);
+      } else {
+        const existingEmail = recognizedEmails.find(e => e.email === email);
+        if (existingEmail) {
+          switchToEmail(existingEmail);
         }
       }
-
-      const submissionData = {
-        email: email || null,
-        responses: currentFormValues,
-        submittedAt: new Date().toISOString(),
-        userAgent: navigator.userAgent
-      };
-
-      console.log('Submitting form response:', submissionData);
-      const response = await submitResponse(formData.id, submissionData);
-      console.log('Form submitted successfully:', response.data);
-      
-      showNotification('Your response has been successfully submitted!', 'success');
-      setShowSuccessModal(true);
-
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      
-      let errorMessage = 'An unexpected error occurred. Please try again.';
-      
-      if (error.response?.status === 404) {
-        errorMessage = 'This form is no longer available. Please contact the form owner.';
-      } else if (error.response?.status === 400) {
-        errorMessage = 'Invalid form data. Please review your responses and try again.';
-      } else if (error.response?.status === 413) {
-        errorMessage = 'Submission too large. Please reduce file sizes or remove attachments.';
-      } else if (!isOnline) {
-        errorMessage = 'Connection lost during submission. Please check your internet connection.';
-      }
-      
-      showNotification(errorMessage, 'error');
     }
-  };
+
+    const submissionData = {
+      email: email || null,
+      responses: currentFormValues,
+      submittedAt: new Date().toISOString(),
+      userAgent: navigator.userAgent
+    };
+
+    console.log('Submitting form response:', submissionData);
+    const response = await submitResponse(formData.id, submissionData);
+    console.log('Form submitted successfully:', response.data);
+    
+    showNotification('Your response has been successfully submitted!', 'success');
+    setShowSuccessModal(true);
+
+  } catch (error) {
+    console.error('Error submitting form:', error);
+    
+    let errorMessage = 'An unexpected error occurred. Please try again.';
+    
+    if (error.response?.status === 404) {
+      errorMessage = 'This form is no longer available. Please contact the form owner.';
+    } else if (error.response?.status === 400) {
+      errorMessage = 'Invalid form data. Please review your responses and try again.';
+    } else if (error.response?.status === 413) {
+      errorMessage = 'Submission too large. Please reduce file sizes or remove attachments.';
+    } else if (!isOnline) {
+      errorMessage = 'Connection lost during submission. Please check your internet connection.';
+    }
+    
+    showNotification(errorMessage, 'error');
+  }
+};
 
   // Enhanced form saving with professional feedback
   const saveForm = async () => {
