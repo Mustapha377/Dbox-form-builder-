@@ -366,7 +366,6 @@ const fieldTypes = [
 
   console.log('Sanitizing field data for API:', fieldData);
 
-  // Start with a clean object, only including API-compatible properties
   const sanitized = {};
 
   // Required fields
@@ -384,8 +383,8 @@ const fieldTypes = [
     sanitized.type = fieldData.type.toString().toUpperCase().replace('-', '_');
   }
 
-  // Optional string fields with validation
-  ['question', 'description', 'placeholder', 'defaultValue'].forEach(field => {
+  // String fields - handle both question AND title for section headers
+  ['question', 'description', 'placeholder', 'defaultValue', 'title'].forEach(field => {
     if (fieldData[field] && typeof fieldData[field] === 'string') {
       const trimmed = fieldData[field].trim();
       if (trimmed.length > 0) {
@@ -394,7 +393,7 @@ const fieldTypes = [
     }
   });
 
-  // FIXED: Boolean fields - Handle required properly
+  // Boolean fields - ALWAYS include them even if false
   if (typeof fieldData.required === 'boolean') {
     sanitized.required = fieldData.required;
   }
@@ -409,7 +408,7 @@ const fieldTypes = [
     }
   });
 
-  // Handle options array with enhanced validation
+  // Handle options array
   if (fieldData.options && Array.isArray(fieldData.options)) {
     sanitized.options = fieldData.options
       .filter(option => option !== null && option !== undefined)
@@ -443,14 +442,13 @@ const fieldTypes = [
     }
   }
 
-  // CRITICAL FIX: Handle validations array properly
+  // Handle validations array
   if (fieldData.validations && Array.isArray(fieldData.validations)) {
     const validValidations = fieldData.validations
       .filter(v => v && typeof v === 'object' && v.type && typeof v.type === 'string')
       .map(v => {
         const validation = { type: v.type };
         
-        // Only add properties that exist and are not undefined
         if (v.value !== undefined && v.value !== null) validation.value = v.value;
         if (v.message && typeof v.message === 'string') validation.message = v.message;
         if (v.min !== undefined && typeof v.min === 'number') validation.min = v.min;
@@ -467,12 +465,11 @@ const fieldTypes = [
     }
   }
 
-  // CRITICAL FIX: Ensure required validation consistency
+  // Ensure required validation consistency
   if (sanitized.required && (!sanitized.validations || !sanitized.validations.some(v => v.type === 'required'))) {
     sanitized.validations = [...(sanitized.validations || []), { type: 'required' }];
   }
 
-  // Remove required validation if field is not required
   if (!sanitized.required && sanitized.validations) {
     sanitized.validations = sanitized.validations.filter(v => v.type !== 'required');
     if (sanitized.validations.length === 0) {
@@ -512,7 +509,8 @@ const fieldTypes = [
       break;
     
     case 'SECTION_HEADER':
-      ['title', 'backgroundColor', 'textColor', 'descriptionColor'].forEach(field => {
+      // CRITICAL: Include ALL section header properties
+      ['backgroundColor', 'textColor', 'descriptionColor', 'backgroundImage'].forEach(field => {
         if (fieldData[field] && typeof fieldData[field] === 'string') {
           sanitized[field] = fieldData[field];
         }
@@ -1329,6 +1327,8 @@ const addField = (type, fieldData = null) => {
       type: normalizedType,
       index: fields.length + 1
     };
+    
+    console.log('Using provided field data for duplication/template');
   } else {
     // Create new field from scratch
     const baseField = {
@@ -1352,15 +1352,10 @@ const addField = (type, fieldData = null) => {
         break;
         
       case 'LINEAR_SCALE':
-        // CRITICAL FIX: Properly initialize LINEAR_SCALE fields
         baseField.scaleMin = 1;
         baseField.scaleMax = 5;
         baseField.scaleMinLabel = '';
         baseField.scaleMaxLabel = '';
-        console.log('Initializing LINEAR_SCALE field with:', {
-          scaleMin: baseField.scaleMin,
-          scaleMax: baseField.scaleMax
-        });
         break;
         
       case 'FILE_UPLOAD':
@@ -1380,7 +1375,8 @@ const addField = (type, fieldData = null) => {
         break;
         
       case 'SECTION_HEADER':
-        baseField.title = 'Section Header';
+         baseField.title = 'Section Header';  
+        baseField.description = '';
         baseField.backgroundColor = '#ffffff';
         baseField.textColor = '#000000';
         baseField.fullWidth = false;
@@ -1438,6 +1434,9 @@ const addField = (type, fieldData = null) => {
         const withoutOptimistic = (old || []).filter(f => f.id !== tempId);
         return [...withoutOptimistic, serverField];
       });
+      
+      // CRITICAL: Invalidate queries to ensure fresh data
+      queryClient.invalidateQueries(['fields', formData.id]);
       
       console.log('=== ADD FIELD DEBUG END (SUCCESS) ===');
     },
@@ -1589,58 +1588,95 @@ const debugFieldState = () => {
 
 
   // UPDATED: duplicateField function with template state clearing
-const duplicateField = (id) => {
-  const fieldToDuplicate = fields.find((field) => field.id === id);
-  if (fieldToDuplicate) {
-    // DO NOT clear template state when duplicating fields
-    // if (templateFields) {
-    //   console.log('Clearing template state - user duplicating field');
-    //   clearTemplateState();
-    // }
+const duplicateField = async (id) => {
+  console.log('=== DUPLICATE FIELD START ===');
+  console.log('Duplicating field ID:', id);
+  
+  const fieldToDuplicate = fields.find((field) => field.id == id); // Use == for loose comparison
+  
+  if (!fieldToDuplicate) {
+    console.error('Field to duplicate not found:', id);
+    setError('Field not found for duplication');
+    return;
+  }
+
+  console.log('Found field to duplicate:', {
+    id: fieldToDuplicate.id,
+    type: fieldToDuplicate.type,
+    question: fieldToDuplicate.question?.substring(0, 30),
+    isTemplate: fieldToDuplicate.isTemplateField || id.toString().includes('template_')
+  });
+
+  try {
+    // Generate unique name for the copy
+    const copyCount = fields.filter((f) => 
+      f.question && f.question.startsWith(`${fieldToDuplicate.question} (Copy`)
+    ).length;
     
-    const copyCount = fields.filter((f) => f.question.startsWith(`${fieldToDuplicate.question} (Copy`)).length;
-    const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const copyNumber = copyCount > 0 ? ` ${copyCount + 1}` : '';
+    const newQuestion = `${fieldToDuplicate.question || 'Untitled Field'} (Copy${copyNumber})`;
     
+    // Create new field data
     const newField = {
-      id: fieldId,
-      formId: parseInt(formData.id, 10),
-      type: fieldToDuplicate.type.toUpperCase().replace('-', '_'),
-      question: `${fieldToDuplicate.question} (Copy${copyCount > 0 ? ` ${copyCount + 1}` : ''})`,
-      description: fieldToDuplicate.description || '',
-      required: fieldToDuplicate.required || false,
-      options: fieldToDuplicate.options ? 
-        fieldToDuplicate.options.map((opt, index) => ({
-          id: `${fieldId}_option_${index}`,
-          value: opt.value,
-          score: opt.score || 0
-        })) : null,
-      calculation: fieldToDuplicate.calculation ? JSON.parse(JSON.stringify(fieldToDuplicate.calculation)) : null,
-      amount: fieldToDuplicate.amount !== null ? parseFloat(fieldToDuplicate.amount) : null,
-      currency: fieldToDuplicate.currency || null,
+      ...fieldToDuplicate,
+      id: undefined, // Will be generated by server or locally
+      question: newQuestion,
       index: fields.length + 1,
+      formId: parseInt(formData.id, 10),
     };
+
+    // Clean up any server-specific fields for duplication
+    delete newField.createdAt;
+    delete newField.updatedAt;
     
-    console.log('Duplicating field with data:', newField);
-    
-    // If we have template fields active, handle locally
+    // Handle options with new IDs
+    if (newField.options && Array.isArray(newField.options)) {
+      newField.options = newField.options.map((opt) => ({
+        ...opt,
+        id: uuidv4(), // Generate new IDs for options
+      }));
+    }
+
+    console.log('Prepared new field data:', newField);
+
+    // Handle template fields differently
     if (templateFields && templateFields.length > 0) {
-      console.log('Duplicating field in template mode');
+      console.log('Duplicating template field');
       
-      // Add to template fields
-      const updatedTemplateFields = [...templateFields, newField];
+      const templateFieldId = `template_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const templateField = {
+        ...newField,
+        id: templateFieldId,
+        isTemplateField: true,
+      };
+      
+      // Update template fields
+      const updatedTemplateFields = [...templateFields, templateField];
       setTemplateFields(updatedTemplateFields);
       
-      // Add to regular fields
+      // Update regular fields (which mirrors template fields)
       setFields(updatedTemplateFields);
       
       // Set as active field
-      setActiveField(newField.id);
-    } else {
-      // Regular field duplication via API
-      addFieldMutation.mutate(newField);
+      setActiveField(templateFieldId);
+      
+      console.log('Template field duplicated successfully');
+      return;
     }
+
+    // For regular fields, use the addField function which handles API creation
+    console.log('Duplicating regular field via addField');
+    
+    // Use addField with the prepared field data
+    addField(fieldToDuplicate.type, newField);
+    
+    console.log('=== DUPLICATE FIELD END ===');
+
+  } catch (error) {
+    console.error('Error duplicating field:', error);
+    setError(`Failed to duplicate field: ${error.message}`);
   }
-};
+}
 
 
   // UPDATED: deleteField function to handle template fields

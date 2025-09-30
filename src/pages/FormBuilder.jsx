@@ -287,7 +287,7 @@ export default function FormBuilder({
   }, [currentEmail, currentPreviewMode, fields, onFieldValueChange]);
 
   // Enhanced field value change handler with real-time validation
- const handleFieldValueChange = (fieldId, value) => {
+const handleFieldValueChange = (fieldId, value) => {
   console.log('Field value change:', { fieldId, value });
   
   if (onFieldValueChange) {
@@ -305,16 +305,17 @@ export default function FormBuilder({
   setTouchedFields(prev => new Set([...prev, fieldId]));
   
   // Clear errors for this field when value changes and field now has value
-  if (formErrors[field.id] && value && (typeof value !== 'string' || value.trim() !== '')) {
+  if (formErrors[fieldId] && value && (typeof value !== 'string' || value.trim() !== '')) {
+    // CHANGED: field.id -> fieldId
     setFormErrors(prev => {
       const newErrors = { ...prev };
-      delete newErrors[fieldId];
+      delete newErrors[fieldId];  // CHANGED: field.id -> fieldId
       return newErrors;
     });
   }
   
   // Handle email field changes
-  const field = fields.find(f => f.id === fieldId);
+  const field = fields.find(f => f.id === fieldId);  // MOVED THIS UP - define field before using it
   if (field && (field.type === 'EMAIL' || field.type === 'email')) {
     handleEmailFieldChange(fieldId, value);
   }
@@ -708,114 +709,76 @@ const validateFormWithFeedback = () => {
     setShowFieldTypes(false);
   };
 
-  const handleDeleteField = async (fieldIdToDelete) => {
-    try {
-      console.log('=== DELETE FIELD DEBUG ===');
-      console.log('Field ID to delete:', fieldIdToDelete);
-      console.log('All fields:', fields.map(f => ({ id: f.id, question: f.question?.substring(0, 30) })));
-      console.log('Template fields count:', templateFields?.length || 0);
-      
-      // Find the field to delete
-      const fieldToDelete = fields.find(f => f.id == fieldIdToDelete); // Use == for loose comparison
-      if (!fieldToDelete) {
-        console.error('Field not found in fields array');
-        showNotification('Field not found - cannot delete', 'error');
-        return;
-      }
-      
-      console.log('Found field to delete:', {
-        id: fieldToDelete.id,
-        question: fieldToDelete.question,
-        isTemplate: isTemplateField(fieldToDelete, templateFields || [])
-      });
-      
-      // Convert to string for consistent validation
-      const fieldIdString = String(fieldIdToDelete);
-      
-      // Validate field ID (allow numbers and strings, but not undefined/null/empty)
-      if (fieldIdToDelete == null || 
-          fieldIdString === 'undefined' || 
-          fieldIdString === 'name' ||
-          fieldIdString.trim() === '') {
-        console.error('Invalid field ID for deletion:', fieldIdToDelete);
-        showNotification('Cannot delete field: Invalid field ID', 'error');
-        return;
-      }
-
-      // Handle template fields differently
-      if (isTemplateField(fieldToDelete, templateFields || [])) {
-        console.log('Deleting template field - removing from local state only');
-        
-        // Remove from template fields array
-        if (templateFields && setTemplateFields) {
-          const updatedTemplateFields = templateFields.filter(tf => tf.id != fieldIdToDelete);
-          setTemplateFields(updatedTemplateFields);
-          console.log('Updated template fields count:', updatedTemplateFields.length);
-        }
-        
-        // Remove from regular fields array
-        if (setFields) {
-          const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
-          setFields(updatedFields);
-          console.log('Updated fields count:', updatedFields.length);
-        }
-        
-        showNotification('Template field removed successfully', 'success');
-      } else {
-        // For regular saved fields, call the API
-        console.log('Deleting regular field via API');
-        
-        if (typeof deleteField === 'function') {
-          await deleteField(fieldIdToDelete);
-          console.log('API delete successful');
-          showNotification('Field deleted successfully', 'success');
-        } else {
-          console.warn('deleteField function not available, using API directly');
-          await apiDeleteField(fieldIdToDelete);
-          
-          // Update local state
-          if (setFields) {
-            const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
-            setFields(updatedFields);
-          }
-          
-          showNotification('Field deleted successfully', 'success');
-        }
-      }
-
-      // Clear active field if it was the deleted one
-      if (activeField == fieldIdToDelete) {
-        setActiveField(null);
-      }
-      
-      console.log('=== DELETE FIELD COMPLETE ===');
-
-    } catch (error) {
-      console.error('Error in handleDeleteField:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
-      
-      let errorMessage = 'Failed to delete field';
-      
-      if (error.message?.includes('Invalid field ID')) {
-        errorMessage = 'Cannot delete field: Invalid identifier';
-      } else if (error.response?.status === 400) {
-        errorMessage = 'Bad request - field may not exist';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Field not found - may have been already deleted';
-        // If 404, remove from local state anyway
-        if (setFields) {
-          const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
-          setFields(updatedFields);
-        }
-      }
-      
-      showNotification(errorMessage, 'error');
+ const handleDeleteField = async (fieldIdToDelete) => {
+  try {
+    console.log('=== DELETE FIELD DEBUG ===');
+    console.log('Field ID to delete:', fieldIdToDelete);
+    console.log('All fields:', fields.map(f => ({ id: f.id, question: f.question?.substring(0, 30) })));
+    console.log('Template fields count:', templateFields?.length || 0);
+    
+    // Find the field to delete
+    const fieldToDelete = fields.find(f => f.id == fieldIdToDelete);
+    if (!fieldToDelete) {
+      console.error('Field not found in fields array');
+      showNotification('Field not found - cannot delete', 'error');
+      return;
     }
-  };
+    
+    const fieldIdString = String(fieldIdToDelete);
+    
+    // Validate field ID
+    if (fieldIdToDelete == null || 
+        fieldIdString === 'undefined' || 
+        fieldIdString === 'name' ||
+        fieldIdString.trim() === '') {
+      console.error('Invalid field ID for deletion:', fieldIdToDelete);
+      showNotification('Cannot delete field: Invalid field ID', 'error');
+      return;
+    }
+
+    // Handle template fields differently
+    if (isTemplateField(fieldToDelete, templateFields || [])) {
+      console.log('Deleting template field - removing from local state only');
+      
+      if (templateFields && setTemplateFields) {
+        const updatedTemplateFields = templateFields.filter(tf => tf.id != fieldIdToDelete);
+        setTemplateFields(updatedTemplateFields);
+      }
+      
+      if (setFields) {
+        const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
+        setFields(updatedFields);
+      }
+      
+      showNotification('Template field removed successfully', 'success');
+    } else {
+      // For regular saved fields, call the API
+      if (typeof deleteField === 'function') {
+        await deleteField(fieldIdToDelete);
+        showNotification('Field deleted successfully', 'success');
+      }
+    }
+
+    // Clear active field if it was the deleted one
+    if (activeField == fieldIdToDelete) {
+      setActiveField(null);
+    }
+
+  } catch (error) {
+    console.error('Error in handleDeleteField:', error);
+    let errorMessage = 'Failed to delete field';
+    
+    if (error.response?.status === 404) {
+      errorMessage = 'Field not found - may have been already deleted';
+      if (setFields) {
+        const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
+        setFields(updatedFields);
+      }
+    }
+    
+    showNotification(errorMessage, 'error');
+  }
+};
 
   const handleColorChange = (newColor) => {
     setFormData(prev => ({ 

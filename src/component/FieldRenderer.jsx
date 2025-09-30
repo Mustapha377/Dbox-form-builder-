@@ -119,6 +119,16 @@ const FieldRenderer = ({
     }
   }, [localValue, field, previewMode]);
 
+  
+useEffect(() => {
+  if (field.defaultValue && !localValue && previewMode) {
+    setLocalValue(field.defaultValue);
+    if (typeof onFieldValueChange === 'function') {
+      onFieldValueChange(field.id, field.defaultValue);
+    }
+  }
+}, [field.id, field.defaultValue, previewMode]);
+
   // Normalize options for consistent handling
  const normalizedOptions = React.useMemo(() => {
   if (!safeField || !safeField.options || !Array.isArray(safeField.options)) {
@@ -144,6 +154,45 @@ const FieldRenderer = ({
     setLocalValue(value);
     onFieldValueChange(field.id, value);
   };
+
+  const handleDuplicateClick = (e) => {
+  e.stopPropagation();
+  
+  console.log('FieldRenderer duplicate clicked:', {
+    fieldId: field.id,
+    fieldQuestion: field.question?.substring(0, 30),
+    isTemplateField: isTemplateField
+  });
+  
+  if (typeof duplicateField === 'function') {
+    const button = e.currentTarget;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<div class="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>';
+    button.disabled = true;
+    
+    try {
+      duplicateField(field.id);
+      
+      setTimeout(() => {
+        if (button && button.parentNode) {
+          button.innerHTML = originalContent;
+          button.disabled = false;
+        }
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error in duplicate:', error);
+      setTimeout(() => {
+        if (button && button.parentNode) {
+          button.innerHTML = originalContent;
+          button.disabled = false;
+        }
+      }, 500);
+    }
+  } else {
+    console.error('duplicateField function not provided to FieldRenderer');
+  }
+};
 
   const handleFieldUpdate = (updates) => {
     if (typeof updateField === 'function') {
@@ -987,7 +1036,7 @@ const FieldRenderer = ({
               className={baseInputClasses}
               style={{ borderColor: isActive ? accentColor : undefined }}
             >
-              <option value="">Choose an option</option>
+              <option value="">{field.placeholder || "Choose an option"}</option>  {/* CHANGED */}
               {(normalizedOptions || []).map((option) => (
                 <option key={option.id} value={option.value}>
                   {option.value}
@@ -1519,448 +1568,597 @@ const renderLinearScaleField = () => {
     );
   };
 
-  const renderSectionHeaderField = () => (
-    <div 
-      className={`border-b border-gray-200 pb-6 mb-6 rounded-lg overflow-hidden ${
-        field.backgroundImage ? 'relative' : ''
-      }`}
-      style={{
-        backgroundColor: field.backgroundColor || 'transparent',
-        backgroundImage: field.backgroundImage ? `url(${field.backgroundImage})` : 'none',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        width: field.fullWidth ? '100%' : 'auto',
-        textAlign: field.centerText ? 'center' : 'left'
-      }}
-    >
-      {field.backgroundImage && (
-        <div className="absolute inset-0 bg-black bg-opacity-40"></div>
-      )}
-      
-      <div className={`relative z-10 p-6 ${field.backgroundImage ? 'text-white' : ''}`}>
-        <h2 
-          className={`text-2xl font-bold mb-3 ${
-            field.backgroundImage ? 'text-white drop-shadow-lg' : 'text-gray-900'
-          }`}
-          style={{ color: field.textColor || undefined }}
-        >
-          {field.title || field.question || 'Section Header'}
-        </h2>
-        
-        {field.description && (
-          <p 
-            className={`text-lg ${
-              field.backgroundImage ? 'text-gray-100 drop-shadow' : 'text-gray-600'
-            }`}
-            style={{ color: field.descriptionColor || undefined }}
-          >
-            {field.description}
-          </p>
-        )}
-      </div>
 
-      {shouldShowAsEditable && isActive && (
-        <div className="mt-6 p-4 border rounded-lg bg-white shadow-sm relative z-20">
+const renderSectionHeaderField = () => {
+  const [imageDragActive, setImageDragActive] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const sectionImageInputRef = useRef(null);
+
+  const handleImageDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setImageDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setImageDragActive(false);
+    }
+  };
+
+  const handleImageDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setImageDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleImageUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleImageSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleImageUpload(e.target.files[0]);
+    }
+  };
+
+  const handleImageUpload = (file) => {
+    if (!file.type.startsWith('image/')) {
+      setValidationMessage('Please upload an image file');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      setValidationMessage('Image size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImageError(false);
+      handleFieldUpdate({ backgroundImage: e.target.result });
+      if (typeof onSectionBgChange === 'function') {
+        onSectionBgChange(field.id, e.target.result);
+      }
+      setValidationMessage('');
+    };
+    reader.onerror = () => {
+      setValidationMessage('Failed to read image file');
+      setImageError(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Only show edit mode when active
+  if (shouldShowAsEditable && isActive) {
+    return (
+      <div className="space-y-4">
+        {/* Preview of section header */}
+        <div 
+          className={`border-b border-gray-200 pb-6 rounded-lg overflow-hidden ${
+            field.backgroundImage ? 'relative min-h-[200px]' : ''
+          }`}
+          style={{
+            backgroundColor: field.backgroundColor || 'transparent',
+            backgroundImage: field.backgroundImage && !imageError ? `url(${field.backgroundImage})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            width: field.fullWidth ? '100%' : 'auto',
+            textAlign: field.centerText ? 'center' : 'left'
+          }}
+        >
+          {field.backgroundImage && !imageError && (
+            <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/50"></div>
+          )}
+          
+          <div className={`relative z-10 p-6 ${field.backgroundImage && !imageError ? 'text-white' : ''}`}>
+            <h2 
+              className={`text-2xl font-bold mb-3 ${
+                field.backgroundImage && !imageError ? 'text-white drop-shadow-lg' : 'text-gray-900'
+              }`}
+              style={{ color: field.backgroundImage && !imageError ? '#ffffff' : (field.textColor || undefined) }}
+            >
+              {field.title || field.question || 'Section Header'}
+            </h2>
+            
+            {field.description && (
+              <p 
+                className={`text-lg ${
+                  field.backgroundImage && !imageError ? 'text-gray-100 drop-shadow' : 'text-gray-600'
+                }`}
+                style={{ color: field.backgroundImage && !imageError ? '#f3f4f6' : (field.descriptionColor || undefined) }}
+              >
+                {field.description}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Settings panel */}
+        <div className="p-4 border rounded-lg bg-white shadow-sm">
           <h4 className="text-sm font-medium text-gray-700 mb-4 flex items-center">
             <Settings className="w-4 h-4 mr-2" />
             Section Header Settings
           </h4>
-          
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Section Title</label>
-              <input
-                type="text"
-                placeholder="Enter section title"
-                value={field.title || ''}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  handleFieldUpdate({ title: e.target.value });
-                }}
-                className="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                style={{ borderColor: accentColor }}
-                onClick={(e) => e.stopPropagation()}
+              <input 
+                type="text" 
+                placeholder="Enter section title" 
+                value={field.title || ''} 
+                onChange={(e) => { 
+                  e.stopPropagation(); 
+                  handleFieldUpdate({ title: e.target.value }); 
+                }} 
+                className="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" 
+                style={{ borderColor: accentColor }} 
+                onClick={(e) => e.stopPropagation()} 
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea
-                value={field.description || ''}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  handleFieldUpdate({ description: e.target.value });
-                }}
-                placeholder="Add a description"
-                rows={2}
-                className="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                style={{ borderColor: accentColor }}
-                onClick={(e) => e.stopPropagation()}
+              <textarea 
+                value={field.description || ''} 
+                onChange={(e) => { 
+                  e.stopPropagation(); 
+                  handleFieldUpdate({ description: e.target.value }); 
+                }} 
+                placeholder="Add a description" 
+                rows={2} 
+                className="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" 
+                style={{ borderColor: accentColor }} 
+                onClick={(e) => e.stopPropagation()} 
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Background Image URL</label>
-              <input
-                type="url"
-                placeholder="https://example.com/image.jpg"
-                value={field.backgroundImage || ''}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  handleFieldUpdate({ backgroundImage: e.target.value });
-                  if (typeof onSectionBgChange === 'function') {
-                    onSectionBgChange(field.id, e.target.value);
-                  }
-                }}
-                className="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                style={{ borderColor: accentColor }}
-                onClick={(e) => e.stopPropagation()}
-              />
-              {field.backgroundImage && (
-                <div className="mt-2 flex items-center space-x-2">
-                  <img 
-                    src={field.backgroundImage} 
-                    alt="Background preview" 
-                    className="w-16 h-16 object-cover rounded border"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFieldUpdate({ backgroundImage: '' });
-                      if (typeof onSectionBgChange === 'function') {
-                        onSectionBgChange(field.id, '');
-                      }
-                    }}
-                    className="px-3 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50"
-                  >
-                    Remove Image
-                  </button>
-                </div>
-              )}
+              <label className="block text-sm font-medium text-gray-700 mb-2">Background Image</label>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-4 text-center transition-all cursor-pointer ${
+                  imageDragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                }`} 
+                onDragEnter={handleImageDrag} 
+                onDragLeave={handleImageDrag} 
+                onDragOver={handleImageDrag} 
+                onDrop={handleImageDrop} 
+                onClick={() => sectionImageInputRef.current?.click()}
+              >
+                <input 
+                  ref={sectionImageInputRef} 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleImageSelect} 
+                  className="hidden" 
+                  onClick={(e) => e.stopPropagation()} 
+                />
+                {field.backgroundImage ? (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <img 
+                        src={field.backgroundImage} 
+                        alt="Section background preview" 
+                        className="w-full h-32 object-cover rounded" 
+                        onError={(e) => { 
+                          console.error('Image failed to load');
+                          setImageError(true);
+                          e.target.style.display = 'none'; 
+                        }}
+                        onLoad={() => {
+                          console.log('Image loaded successfully');
+                          setImageError(false);
+                        }}
+                      />
+                      {imageError && (
+                        <div className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
+                          <div className="text-center">
+                            <Image className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                            <p className="text-sm text-gray-500">Failed to load image</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 justify-center">
+                      <button 
+                        type="button" 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          sectionImageInputRef.current?.click(); 
+                        }} 
+                        className="px-3 py-1 text-xs text-blue-600 border border-blue-300 rounded hover:bg-blue-50"
+                      >
+                        Change
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          handleFieldUpdate({ backgroundImage: '' }); 
+                          if (typeof onSectionBgChange === 'function') 
+                            onSectionBgChange(field.id, ''); 
+                          setImageError(false);
+                        }} 
+                        className="px-3 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-4">
+                    <Upload className={`w-8 h-8 mx-auto mb-2 ${imageDragActive ? 'text-blue-500' : 'text-gray-400'}`} />
+                    <p className="text-sm font-medium text-gray-700">{imageDragActive ? 'Drop image here' : 'Upload background image'}</p>
+                    <p className="text-xs text-gray-500 mt-1">Drag and drop or click to browse</p>
+                    <p className="text-xs text-gray-400 mt-1">Max size: 5MB</p>
+                  </div>
+                )}
+              </div>
+              {validationMessage && <p className="text-xs text-red-600 mt-1">{validationMessage}</p>}
+              <div className="mt-2">
+                <input 
+                  type="url" 
+                  placeholder="Or paste image URL" 
+                  value={field.backgroundImage && field.backgroundImage.startsWith('http') ? field.backgroundImage : ''} 
+                  onChange={(e) => { 
+                    e.stopPropagation(); 
+                    handleFieldUpdate({ backgroundImage: e.target.value }); 
+                    if (typeof onSectionBgChange === 'function') 
+                      onSectionBgChange(field.id, e.target.value); 
+                  }} 
+                  className="w-full p-2 border rounded text-xs focus:ring-2 focus:ring-blue-500" 
+                  style={{ borderColor: accentColor }} 
+                  onClick={(e) => e.stopPropagation()} 
+                />
+              </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Background Color</label>
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="color"
-                    value={field.backgroundColor || '#ffffff'}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleFieldUpdate({ backgroundColor: e.target.value });
-                    }}
-                    className="w-12 h-8 border rounded cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
+                  <input 
+                    type="color" 
+                    value={field.backgroundColor || '#ffffff'} 
+                    onChange={(e) => { 
+                      e.stopPropagation(); 
+                      handleFieldUpdate({ backgroundColor: e.target.value }); 
+                    }} 
+                    className="w-12 h-8 border rounded cursor-pointer" 
+                    onClick={(e) => e.stopPropagation()} 
                   />
-                  <input
-                    type="text"
-                    value={field.backgroundColor || '#ffffff'}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleFieldUpdate({ backgroundColor: e.target.value });
-                    }}
-                    className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500"
-                    placeholder="#ffffff"
-                    style={{ borderColor: accentColor }}
-                    onClick={(e) => e.stopPropagation()}
+                  <input 
+                    type="text" 
+                    value={field.backgroundColor || '#ffffff'} 
+                    onChange={(e) => { 
+                      e.stopPropagation(); 
+                      handleFieldUpdate({ backgroundColor: e.target.value }); 
+                    }} 
+                    className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500" 
+                    placeholder="#ffffff" 
+                    style={{ borderColor: accentColor }} 
+                    onClick={(e) => e.stopPropagation()} 
                   />
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Text Color</label>
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="color"
-                    value={field.textColor || '#000000'}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleFieldUpdate({ textColor: e.target.value });
-                    }}
-                    className="w-12 h-8 border rounded cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
+                  <input 
+                    type="color" 
+                    value={field.textColor || '#000000'} 
+                    onChange={(e) => { 
+                      e.stopPropagation(); 
+                      handleFieldUpdate({ textColor: e.target.value }); 
+                    }} 
+                    className="w-12 h-8 border rounded cursor-pointer" 
+                    onClick={(e) => e.stopPropagation()} 
                   />
-                  <input
-                    type="text"
-                    value={field.textColor || '#000000'}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleFieldUpdate({ textColor: e.target.value });
-                    }}
-                    className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500"
-                    placeholder="#000000"
-                    style={{ borderColor: accentColor }}
-                    onClick={(e) => e.stopPropagation()}
+                  <input 
+                    type="text" 
+                    value={field.textColor || '#000000'} 
+                    onChange={(e) => { 
+                      e.stopPropagation(); 
+                      handleFieldUpdate({ textColor: e.target.value }); 
+                    }} 
+                    className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500" 
+                    placeholder="#000000" 
+                    style={{ borderColor: accentColor }} 
+                    onClick={(e) => e.stopPropagation()} 
                   />
                 </div>
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Description Color</label>
               <div className="flex items-center space-x-2">
-                <input
-                  type="color"
-                  value={field.descriptionColor || '#000000'}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleFieldUpdate({ descriptionColor: e.target.value });
-                  }}
-                  className="w-12 h-8 border rounded cursor-pointer"
-                  onClick={(e) => e.stopPropagation()}
+                <input 
+                  type="color" 
+                  value={field.descriptionColor || '#000000'} 
+                  onChange={(e) => { 
+                    e.stopPropagation(); 
+                    handleFieldUpdate({ descriptionColor: e.target.value }); 
+                  }} 
+                  className="w-12 h-8 border rounded cursor-pointer" 
+                  onClick={(e) => e.stopPropagation()} 
                 />
-                <input
-                  type="text"
-                  value={field.descriptionColor || '#000000'}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleFieldUpdate({ descriptionColor: e.target.value });
-                  }}
-                  className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500"
-                  placeholder="#000000"
-                  style={{ borderColor: accentColor }}
-                  onClick={(e) => e.stopPropagation()}
+                <input 
+                  type="text" 
+                  value={field.descriptionColor || '#000000'} 
+                  onChange={(e) => { 
+                    e.stopPropagation(); 
+                    handleFieldUpdate({ descriptionColor: e.target.value }); 
+                  }} 
+                  className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500" 
+                  placeholder="#000000" 
+                  style={{ borderColor: accentColor }} 
+                  onClick={(e) => e.stopPropagation()} 
                 />
               </div>
             </div>
-
             <div className="flex items-center space-x-4">
               <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={field.fullWidth || false}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleFieldUpdate({ fullWidth: e.target.checked });
-                  }}
-                  className="rounded border-gray-300 focus:ring-blue-500"
-                  style={{ accentColor }}
-                  onClick={(e) => e.stopPropagation()}
+                <input 
+                  type="checkbox" 
+                  checked={field.fullWidth || false} 
+                  onChange={(e) => { 
+                    e.stopPropagation(); 
+                    handleFieldUpdate({ fullWidth: e.target.checked }); 
+                  }} 
+                  className="rounded border-gray-300 focus:ring-blue-500" 
+                  style={{ accentColor }} 
+                  onClick={(e) => e.stopPropagation()} 
                 />
                 <span className="text-sm">Full width section</span>
               </label>
-              
               <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={field.centerText || false}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleFieldUpdate({ centerText: e.target.checked });
-                  }}
-                  className="rounded border-gray-300 focus:ring-blue-500"
-                  style={{ accentColor }}
-                  onClick={(e) => e.stopPropagation()}
+                <input 
+                  type="checkbox" 
+                  checked={field.centerText || false} 
+                  onChange={(e) => { 
+                    e.stopPropagation(); 
+                    handleFieldUpdate({ centerText: e.target.checked }); 
+                  }} 
+                  className="rounded border-gray-300 focus:ring-blue-500" 
+                  style={{ accentColor }} 
+                  onClick={(e) => e.stopPropagation()} 
                 />
                 <span className="text-sm">Center text</span>
               </label>
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+  
+  // Preview mode (when not active)
+  return (
+    <div 
+      className={`border-b border-gray-200 pb-6 mb-6 rounded-lg overflow-hidden ${field.backgroundImage && !imageError ? 'relative min-h-[200px]' : ''}`} 
+      style={{ 
+        backgroundColor: field.backgroundColor || 'transparent', 
+        backgroundImage: field.backgroundImage && !imageError ? `url(${field.backgroundImage})` : 'none', 
+        backgroundSize: 'cover', 
+        backgroundPosition: 'center', 
+        backgroundRepeat: 'no-repeat', 
+        width: field.fullWidth ? '100%' : 'auto', 
+        textAlign: field.centerText ? 'center' : 'left' 
+      }}
+    >
+      {field.backgroundImage && !imageError && (
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/50"></div>
       )}
+      <div className={`relative z-10 p-6 ${field.backgroundImage && !imageError ? 'text-white' : ''}`}>
+        <h2 
+          className={`text-2xl font-bold mb-3 ${field.backgroundImage && !imageError ? 'text-white drop-shadow-lg' : 'text-gray-900'}`} 
+          style={{ color: field.backgroundImage && !imageError ? '#ffffff' : (field.textColor || undefined) }}
+        >
+          {field.title || field.question || 'Section Header'}
+        </h2>
+        {field.description && (
+          <p 
+            className={`text-lg ${field.backgroundImage && !imageError ? 'text-gray-100 drop-shadow' : 'text-gray-600'}`} 
+            style={{ color: field.backgroundImage && !imageError ? '#f3f4f6' : (field.descriptionColor || undefined) }}
+          >
+            {field.description}
+          </p>
+        )}
+      </div>
     </div>
   );
+};
 
-  const renderShortAnswerField = (baseInputClasses) => (
-    <div>
-      <input
-        type="text"
-        value={localValue}
-        onChange={(e) => handleValueChange(e.target.value)}
-        placeholder="Your answer"
-        className={`${baseInputClasses} sm:text-sm`}
-        style={{ borderColor: isActive ? accentColor : undefined }}
-      />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-    </div>
-  );
+ const renderShortAnswerField = (baseInputClasses) => (
+  <div>
+    <input
+      type="text"
+      value={localValue}
+      onChange={(e) => handleValueChange(e.target.value)}
+      placeholder={field.placeholder || "Your answer"}  // CHANGED
+      className={`${baseInputClasses} sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+  </div>
+);
 
   const renderParagraphField = (baseInputClasses) => (
-    <div>
-      <textarea
-        value={localValue}
-        onChange={(e) => handleValueChange(e.target.value)}
-        placeholder="Your answer"
-        rows={4}
-        className={`${baseInputClasses} resize-y sm:text-sm`}
-        style={{ borderColor: isActive ? accentColor : undefined }}
-      />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-    </div>
-  );
+  <div>
+    <textarea
+      value={localValue}
+      onChange={(e) => handleValueChange(e.target.value)}
+      placeholder={field.placeholder || "Your answer"}  // CHANGED
+      rows={4}
+      className={`${baseInputClasses} resize-y sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+  </div>
+);
 
-  const renderEmailField = (baseInputClasses) => (
-    <div>
-      <input
-        type="email"
-        value={localValue}
-        onChange={handleEmailChange}
-        placeholder="your.email@example.com"
-        className={`${baseInputClasses} sm:text-sm`}
-        style={{ borderColor: isActive ? accentColor : undefined }}
-      />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-      {!validationMessage && localValue && previewMode && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(localValue) && (
-        <p className="text-green-500 text-sm mt-1">Valid email address</p>
-      )}
-    </div>
-  );
+ const renderEmailField = (baseInputClasses) => (
+  <div>
+    <input
+      type="email"
+      value={localValue}
+      onChange={handleEmailChange}
+      placeholder={field.placeholder || "your.email@example.com"}  // CHANGED
+      className={`${baseInputClasses} sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+    {!validationMessage && localValue && previewMode && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(localValue) && (
+      <p className="text-green-500 text-sm mt-1">Valid email address</p>
+    )}
+  </div>
+);
 
-  const renderPhoneField = () => (
-    <div>
-      <div className="flex">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowCountryDropdown(!showCountryDropdown)}
-            className={`px-3 py-2 border rounded-l-lg bg-gray-50 hover:bg-gray-100 transition-colors flex items-center gap-2 sm:text-sm ${
-              hasError ? 'border-red-500' : 'border-gray-300'
-            }`}
-          >
-            <span>{COUNTRY_CODES.find(c => c.code === selectedCountryCode)?.flag}</span>
-            <span className="text-sm font-medium">{selectedCountryCode}</span>
-            <ChevronDown className="w-4 h-4" />
-          </button>
-          
-          {showCountryDropdown && (
-            <div className="absolute top-full left-0 z-50 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto w-64 sm:w-48">
-            {safeArray(COUNTRY_CODES).map(country => (
-                <button
-                  key={country.code}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCountryCode(country.code);
-                    setShowCountryDropdown(false);
-                    if (localValue) {
-                      const digits = localValue.replace(/[^\d]/g, '');
-                      const formatted = formatPhoneAsUserTypes(digits, country.code);
-                      handleValueChange(formatted);
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 sm:text-sm"
-                >
-                  <span>{country.flag}</span>
-                  <span className="flex-1">{country.name}</span>
-                  <span className="text-sm text-gray-500">{country.code}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        
-        <input
-          type="tel"
-          value={localValue}
-          onChange={handlePhoneChange}
-          placeholder={getPhoneExample(selectedCountryCode)}
-          className={`flex-1 px-3 py-2 border border-l-0 rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors sm:text-sm ${
-            hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+ const renderPhoneField = () => (
+  <div>
+    <div className="flex">
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+          className={`px-3 py-2 border rounded-l-lg bg-gray-50 hover:bg-gray-100 transition-colors flex items-center gap-2 sm:text-sm ${
+            hasError ? 'border-red-500' : 'border-gray-300'
           }`}
-          style={{ borderColor: isActive ? accentColor : undefined }}
-        />
+        >
+          <span>{COUNTRY_CODES.find(c => c.code === selectedCountryCode)?.flag}</span>
+          <span className="text-sm font-medium">{selectedCountryCode}</span>
+          <ChevronDown className="w-4 h-4" />
+        </button>
+        
+        {showCountryDropdown && (
+          <div className="absolute top-full left-0 z-50 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto w-64 sm:w-48">
+          {safeArray(COUNTRY_CODES).map(country => (
+              <button
+                key={country.code}
+                type="button"
+                onClick={() => {
+                  setSelectedCountryCode(country.code);
+                  setShowCountryDropdown(false);
+                  if (localValue) {
+                    const digits = localValue.replace(/[^\d]/g, '');
+                    const formatted = formatPhoneAsUserTypes(digits, country.code);
+                    handleValueChange(formatted);
+                  }
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 sm:text-sm"
+              >
+                <span>{country.flag}</span>
+                <span className="flex-1">{country.name}</span>
+                <span className="text-sm text-gray-500">{country.code}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-      {!validationMessage && localValue && previewMode && validatePhoneNumber(localValue, selectedCountryCode) && (
-        <p className="text-green-500 text-sm mt-1">Valid phone number</p>
-      )}
-    </div>
-  );
-
-  const renderUrlField = (baseInputClasses) => (
-    <div>
+      
       <input
-        type="url"
+        type="tel"
         value={localValue}
-        onChange={(e) => handleValueChange(e.target.value)}
-        placeholder="https://example.com"
-        className={`${baseInputClasses} sm:text-sm`}
+        onChange={handlePhoneChange}
+        placeholder={field.placeholder || getPhoneExample(selectedCountryCode)}  // CHANGED
+        className={`flex-1 px-3 py-2 border border-l-0 rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors sm:text-sm ${
+          hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+        }`}
         style={{ borderColor: isActive ? accentColor : undefined }}
       />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
     </div>
-  );
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+    {!validationMessage && localValue && previewMode && validatePhoneNumber(localValue, selectedCountryCode) && (
+      <p className="text-green-500 text-sm mt-1">Valid phone number</p>
+    )}
+  </div>
+);
+
+ const renderUrlField = (baseInputClasses) => (
+  <div>
+    <input
+      type="url"
+      value={localValue}
+      onChange={(e) => handleValueChange(e.target.value)}
+      placeholder={field.placeholder || "https://example.com"}  // CHANGED
+      className={`${baseInputClasses} sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+  </div>
+);
 
   const renderNumberField = (baseInputClasses) => (
-    <div>
-      <input
-        type="text"
-        value={localValue}
-        onChange={handleNumberChange}
-        placeholder="Enter a number"
-        className={`${baseInputClasses} sm:text-sm`}
-        style={{ borderColor: isActive ? accentColor : undefined }}
-        inputMode="numeric"
-        pattern="[0-9]*"
-      />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-      {!validationMessage && localValue && previewMode && !isNaN(Number(localValue)) && (
-        <p className="text-green-500 text-sm mt-1">Valid number</p>
-      )}
-    </div>
-  );
+  <div>
+    <input
+      type="text"
+      value={localValue}
+      onChange={handleNumberChange}
+      placeholder={field.placeholder || "Enter a number"}  // CHANGED
+      className={`${baseInputClasses} sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+      inputMode="numeric"
+      pattern="[0-9]*"
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+    {!validationMessage && localValue && previewMode && !isNaN(Number(localValue)) && (
+      <p className="text-green-500 text-sm mt-1">Valid number</p>
+    )}
+  </div>
+);
 
-  const renderDateField = (baseInputClasses) => (
-    <div>
-      <input
-        type="date"
-        value={localValue}
-        onChange={(e) => handleValueChange(e.target.value)}
-        className={`${baseInputClasses} sm:text-sm`}
-        style={{ borderColor: isActive ? accentColor : undefined }}
-      />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-    </div>
-  );
+ const renderDateField = (baseInputClasses) => (
+  <div>
+    <input
+      type="date"
+      value={localValue}
+      onChange={(e) => handleValueChange(e.target.value)}
+      className={`${baseInputClasses} sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+  </div>
+);
 
-  const renderTimeField = (baseInputClasses) => (
-    <div>
-      <input
-        type="time"
-        value={localValue}
-        onChange={(e) => handleValueChange(e.target.value)}
-        className={`${baseInputClasses} sm:text-sm`}
-        style={{ borderColor: isActive ? accentColor : undefined }}
-      />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-    </div>
-  );
+ const renderTimeField = (baseInputClasses) => (
+  <div>
+    <input
+      type="time"
+      value={localValue}
+      onChange={(e) => handleValueChange(e.target.value)}
+      className={`${baseInputClasses} sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+  </div>
+);
 
-  const renderDateTimeField = (baseInputClasses) => (
-    <div>
-      <input
-        type="datetime-local"
-        value={localValue}
-        onChange={(e) => handleValueChange(e.target.value)}
-        className={`${baseInputClasses} sm:text-sm`}
-        style={{ borderColor: isActive ? accentColor : undefined }}
-      />
-      {validationMessage && previewMode && (
-        <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
-      )}
-    </div>
-  );
+ const renderDateTimeField = (baseInputClasses) => (
+  <div>
+    <input
+      type="datetime-local"
+      value={localValue}
+      onChange={(e) => handleValueChange(e.target.value)}
+      className={`${baseInputClasses} sm:text-sm`}
+      style={{ borderColor: isActive ? accentColor : undefined }}
+    />
+    {validationMessage && previewMode && (
+      <p className="text-red-500 text-sm mt-1">{validationMessage}</p>
+    )}
+  </div>
+);
 
   const renderGridField = () => {
     const rows = field.rows || ['Row 1'];
@@ -2424,10 +2622,7 @@ const renderLinearScaleField = () => {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      duplicateField(field.id);
-                    }}
+                    onClick={handleDuplicateClick}
                     className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
                     title="Duplicate field"
                   >
@@ -2454,38 +2649,40 @@ const renderLinearScaleField = () => {
                   </button>
                 </div>
               </div>
-
-              {showAdvanced && (
+{showAdvanced && (
                 <div className="mt-4 space-y-4 bg-gray-50 p-4 rounded-lg">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Field Settings</h4>
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={field.placeholder || ''}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleFieldUpdate({ placeholder: e.target.value });
-                        }}
-                        placeholder="Placeholder text"
-                        className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500"
-                        style={{ borderColor: accentColor }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <input
-                        type="text"
-                        value={field.defaultValue || ''}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleFieldUpdate({ defaultValue: e.target.value });
-                        }}
-                        placeholder="Default value"
-                        className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500"
-                        style={{ borderColor: accentColor }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                  {/* Only show Field Settings for text input fields */}
+                  {['SHORT_ANSWER', 'PARAGRAPH', 'EMAIL', 'PHONE', 'URL', 'NUMBER', 'DATE', 'TIME', 'DATE_TIME'].includes(fieldType) && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Field Settings</h4>
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={field.placeholder || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleFieldUpdate({ placeholder: e.target.value });
+                          }}
+                          placeholder="Placeholder text"
+                          className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          style={{ borderColor: accentColor }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <input
+                          type="text"
+                          value={field.defaultValue || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleFieldUpdate({ defaultValue: e.target.value });
+                          }}
+                          placeholder="Default value"
+                          className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          style={{ borderColor: accentColor }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {renderValidationSettings()}
                   {renderBranchingSettings()}
                   {renderQuizSettings()}
