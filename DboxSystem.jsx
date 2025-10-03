@@ -4,6 +4,7 @@ import { useMutation, useQuery, QueryClient, QueryClientProvider, useQueryClient
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import api from './src/api/index.js';
+import { NotificationProvider } from './src/component/NotificationSystem.jsx';
 import { getForms, createForm, getFields, createField, getResponses } from './src/api/index.js';
 import Sidebar from './src/component/Sidebar';
 import ShareModal from './src/component/ShareModal';
@@ -1922,6 +1923,7 @@ const setFieldsFromFormBuilder = (newFields) => {
               }
               
               return (
+                 <NotificationProvider>
                 <FormBuilder
                   formData={formData}
                   setFormData={setFormData}
@@ -1959,6 +1961,7 @@ const setFieldsFromFormBuilder = (newFields) => {
                   convertTemplateToRegularFields={convertTemplateToRegularFields}
                   setIsResetting={setIsResetting}
                 />
+                </NotificationProvider>
               );
               console.log('=== RENDERING FORM BUILDER ===');
               console.log('Fields passed to FormBuilder:', fields);
@@ -1978,6 +1981,7 @@ const setFieldsFromFormBuilder = (newFields) => {
               }
               
               return (
+             <NotificationProvider>
             <FormBuilder
               formData={formData}
               setFormData={setFormData}
@@ -2013,8 +2017,9 @@ const setFieldsFromFormBuilder = (newFields) => {
               setFields={setFields}
               queryClient={queryClient}
               convertTemplateToRegularFields={convertTemplateToRegularFields}
-              setIsResetting={setIsResetting} // Add this prop
+              setIsResetting={setIsResetting} 
             />
+            </NotificationProvider>
               );
             case 'responses':
               return (

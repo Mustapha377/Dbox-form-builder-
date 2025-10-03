@@ -214,8 +214,8 @@ const HeaderEditor = ({
             />
           )}
           
-          {/* Enhanced button controls */}
-          <div className="absolute top-4 right-4 flex gap-2">
+         {/* Enhanced button controls */}
+          <div className="absolute top-4 right-4 flex gap-2 z-10">
             <input
               type="file"
               accept="image/*"
@@ -227,13 +227,18 @@ const HeaderEditor = ({
               htmlFor="header-image-change"
               className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors shadow-lg cursor-pointer flex items-center justify-center"
               title="Change image"
+              onClick={(e) => e.stopPropagation()}
             >
               <RefreshCw className="w-4 h-4" />
             </label>
             <button
-              onClick={removeImage}
+              onClick={(e) => {
+                e.stopPropagation();
+                removeImage();
+              }}
               className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
               title="Remove image"
+              type="button"
             >
               <X className="w-4 h-4" />
             </button>

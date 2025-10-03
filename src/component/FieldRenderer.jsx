@@ -244,7 +244,7 @@ useEffect(() => {
     handleValueChange(numericValue);
   };
 
-  const handlePhoneChange = (e) => {
+ const handlePhoneChange = (e) => {
     const rawValue = e.target.value;
     
     if (!rawValue) {
@@ -252,24 +252,19 @@ useEffect(() => {
       return;
     }
     
-    if (rawValue.startsWith(selectedCountryCode)) {
-      const formatted = formatPhoneAsUserTypes(rawValue, selectedCountryCode);
-      handleValueChange(formatted);
-      return;
-    }
-    
-    if (rawValue && !rawValue.startsWith('+')) {
+    // Allow user to type freely, just validate format
+    if (rawValue.startsWith('+')) {
+      // User is typing with country code
+      handleValueChange(rawValue);
+    } else {
+      // User typing without country code - prepend selected one
       const digits = rawValue.replace(/[^\d]/g, '');
       if (digits) {
-        const withCountryCode = selectedCountryCode + digits;
-        const formatted = formatPhoneAsUserTypes(withCountryCode, selectedCountryCode);
-        handleValueChange(formatted);
-        return;
+        handleValueChange(selectedCountryCode + ' ' + digits);
+      } else {
+        handleValueChange('');
       }
     }
-    
-    const formatted = formatPhoneAsUserTypes(rawValue, selectedCountryCode);
-    handleValueChange(formatted);
   };
 
   const handleEmailChange = (e) => {
@@ -1809,10 +1804,10 @@ const renderSectionHeaderField = () => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Background Color</label>
-                <div className="flex items-center space-x-2">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Background Color</label>
+                <div className="flex items-center gap-2">
                   <input 
                     type="color" 
                     value={field.backgroundColor || '#ffffff'} 
@@ -1820,7 +1815,7 @@ const renderSectionHeaderField = () => {
                       e.stopPropagation(); 
                       handleFieldUpdate({ backgroundColor: e.target.value }); 
                     }} 
-                    className="w-12 h-8 border rounded cursor-pointer" 
+                    className="w-12 h-10 sm:w-10 sm:h-8 border rounded cursor-pointer flex-shrink-0" 
                     onClick={(e) => e.stopPropagation()} 
                   />
                   <input 
@@ -1830,16 +1825,17 @@ const renderSectionHeaderField = () => {
                       e.stopPropagation(); 
                       handleFieldUpdate({ backgroundColor: e.target.value }); 
                     }} 
-                    className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500" 
+                    className="flex-1 min-w-0 p-2 border rounded text-xs sm:text-sm focus:ring-2 focus:ring-blue-500" 
                     placeholder="#ffffff" 
                     style={{ borderColor: accentColor }} 
                     onClick={(e) => e.stopPropagation()} 
                   />
                 </div>
               </div>
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Text Color</label>
-                <div className="flex items-center space-x-2">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Text Color</label>
+                <div className="flex items-center gap-2">
                   <input 
                     type="color" 
                     value={field.textColor || '#000000'} 
@@ -1847,7 +1843,7 @@ const renderSectionHeaderField = () => {
                       e.stopPropagation(); 
                       handleFieldUpdate({ textColor: e.target.value }); 
                     }} 
-                    className="w-12 h-8 border rounded cursor-pointer" 
+                    className="w-12 h-10 sm:w-10 sm:h-8 border rounded cursor-pointer flex-shrink-0" 
                     onClick={(e) => e.stopPropagation()} 
                   />
                   <input 
@@ -1857,7 +1853,35 @@ const renderSectionHeaderField = () => {
                       e.stopPropagation(); 
                       handleFieldUpdate({ textColor: e.target.value }); 
                     }} 
-                    className="flex-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500" 
+                    className="flex-1 min-w-0 p-2 border rounded text-xs sm:text-sm focus:ring-2 focus:ring-blue-500" 
+                    placeholder="#000000" 
+                    style={{ borderColor: accentColor }} 
+                    onClick={(e) => e.stopPropagation()} 
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Description Color</label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={field.descriptionColor || '#000000'} 
+                    onChange={(e) => { 
+                      e.stopPropagation(); 
+                      handleFieldUpdate({ descriptionColor: e.target.value }); 
+                    }} 
+                    className="w-12 h-10 sm:w-10 sm:h-8 border rounded cursor-pointer flex-shrink-0" 
+                    onClick={(e) => e.stopPropagation()} 
+                  />
+                  <input 
+                    type="text" 
+                    value={field.descriptionColor || '#000000'} 
+                    onChange={(e) => { 
+                      e.stopPropagation(); 
+                      handleFieldUpdate({ descriptionColor: e.target.value }); 
+                    }} 
+                    className="flex-1 min-w-0 p-2 border rounded text-xs sm:text-sm focus:ring-2 focus:ring-blue-500" 
                     placeholder="#000000" 
                     style={{ borderColor: accentColor }} 
                     onClick={(e) => e.stopPropagation()} 

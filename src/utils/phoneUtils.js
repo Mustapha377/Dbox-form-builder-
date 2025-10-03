@@ -220,10 +220,11 @@ export const validatePhoneNumber = (phoneNumber, countryCode = null) => {
     };
   }
 
+  // FIXED: Don't call formatPhoneNumber here - just return the cleaned value
   return {
     isValid: true,
     country: country,
-    formatted: formatPhoneNumber(phoneNumber, country.code),
+    formatted: cleaned, // Return cleaned instead of calling formatPhoneNumber
     cleaned: cleaned
   };
 };
@@ -232,12 +233,14 @@ export const validatePhoneNumber = (phoneNumber, countryCode = null) => {
 export const formatPhoneNumber = (phoneNumber, countryCode = null) => {
   if (!phoneNumber || typeof phoneNumber !== 'string') return phoneNumber;
 
-  const validation = validatePhoneNumber(phoneNumber, countryCode);
+  // FIXED: Don't validate here - just format
+  const cleaned = phoneNumber.replace(/[^\d+]/g, '');
   
-  if (!validation.isValid) return phoneNumber;
-
-  const country = validation.country;
-  const cleaned = validation.cleaned;
+  if (!cleaned.startsWith('+')) return phoneNumber;
+  
+  const country = countryCode ? getCountryByCode(countryCode) : detectCountryCode(cleaned);
+  
+  if (!country) return phoneNumber;
 
   // Apply country-specific formatting if pattern exists
   if (country.pattern && country.format) {

@@ -9,6 +9,8 @@ import { deleteField as apiDeleteField, updateField as apiUpdateField } from '..
 import { v4 as uuidv4 } from 'uuid';
 import { isTemplateField, getTemplateFieldStyling } from '../utils/templateUtils';
 import { createForm, updateForm, submitResponse } from '../api/index';
+import { useNotifications, NOTIFICATION_MESSAGES, ProfessionalAlert } from '../component/NotificationSystem';
+import { ConfirmationModal } from '../component/ConfirmationModal';
 import {
   Save, Smartphone, Monitor, Type, List, Grid3x3, Calendar, Upload,
   CreditCard, Calculator, Star, Clock, AlignLeft, Image, PlusCircle, Shuffle,
@@ -91,104 +93,6 @@ const ProfessionalSuccessModal = ({ isVisible, onClose, onFillAnother, formTitle
   );
 };
 
-// Professional Alert Dialog
-const ProfessionalAlert = ({ isVisible, onClose, title, message, type = 'warning', onConfirm, showCancel = false }) => {
-  if (!isVisible) return null;
-
-  const iconColor = {
-    error: 'text-red-600',
-    warning: 'text-yellow-600',
-    info: 'text-blue-600',
-    success: 'text-green-600'
-  };
-
-  const bgColor = {
-    error: 'bg-red-100',
-    warning: 'bg-yellow-100', 
-    info: 'bg-blue-100',
-    success: 'bg-green-100'
-  };
-
-  const buttonColor = {
-    error: 'bg-red-600 hover:bg-red-700',
-    warning: 'bg-yellow-600 hover:bg-yellow-700',
-    info: 'bg-blue-600 hover:bg-blue-700',
-    success: 'bg-green-600 hover:bg-green-700'
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="p-6">
-          <div className="flex items-start gap-4">
-            <div className={`w-10 h-10 rounded-full ${bgColor[type]} flex items-center justify-center flex-shrink-0`}>
-              <TriangleAlert className={`w-5 h-5 ${iconColor[type]}`} />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">{message}</p>
-            </div>
-          </div>
-          
-          <div className="flex gap-3 mt-6 justify-end">
-            {showCancel && (
-              <button
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              onClick={() => {
-                if (onConfirm) onConfirm();
-                onClose();
-              }}
-              className={`px-4 py-2 text-white rounded-lg transition-colors ${buttonColor[type]}`}
-            >
-              {type === 'error' ? 'Fix Issues' : 'Continue'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Professional Toast Notification
-const ToastNotification = ({ message, type, onClose, duration = 4000 }) => {
-  const [isVisible, setIsVisible] = useState(true);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(onClose, 300);
-    }, duration);
-    
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
-
-  if (!isVisible) return null;
-
-  const styles = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800'
-  };
-
-  return (
-    <div className={`fixed top-4 right-4 z-50 p-4 border rounded-lg shadow-lg max-w-sm ${styles[type]} animate-slide-in`}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{message}</span>
-        <button onClick={() => setIsVisible(false)} className="ml-3">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-};
-
 export default function FormBuilder({
   formData,
   setFormData,
@@ -223,6 +127,9 @@ export default function FormBuilder({
   setTemplateFields,
   setIsLoadingTemplateFromFormBuilder,
 }) {
+  // Notification hook
+  const notifications = useNotifications();
+
   // Email recognition hook
   const {
     recognizedEmails,
@@ -246,7 +153,7 @@ export default function FormBuilder({
   const [saveStatus, setSaveStatus] = useState(null);
   const [isFormSaved, setIsFormSaved] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [notification, setNotification] = useState(null);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [validationAlert, setValidationAlert] = useState({ show: false, data: {} });
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [touchedFields, setTouchedFields] = useState(new Set());
@@ -263,11 +170,6 @@ export default function FormBuilder({
     } : setLocalFormValues;
   const currentShowShareModal = externalSetShowShareModal ? false : localShowShareModal;
   const setCurrentShowShareModal = externalSetShowShareModal || setLocalShowShareModal;
-
-  // Show notification helper
-  const showNotification = (message, type = 'info') => {
-    setNotification({ message, type });
-  };
 
   // Auto-populate email field when current email changes
   useEffect(() => {
@@ -287,266 +189,268 @@ export default function FormBuilder({
   }, [currentEmail, currentPreviewMode, fields, onFieldValueChange]);
 
   // Enhanced field value change handler with real-time validation
-const handleFieldValueChange = (fieldId, value) => {
-  console.log('Field value change:', { fieldId, value });
-  
-  if (onFieldValueChange) {
-    onFieldValueChange(fieldId, value);
-  } else {
-    setLocalFormValues(prev => ({ ...prev, [fieldId]: value }));
-  }
-  
-  // Track user interaction
-  if (!hasUserInteracted) {
-    setHasUserInteracted(true);
-  }
-  
-  // Track which fields have been touched
-  setTouchedFields(prev => new Set([...prev, fieldId]));
-  
-  // Clear errors for this field when value changes and field now has value
-  if (formErrors[fieldId] && value && (typeof value !== 'string' || value.trim() !== '')) {
-    // CHANGED: field.id -> fieldId
-    setFormErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[fieldId];  // CHANGED: field.id -> fieldId
-      return newErrors;
-    });
-  }
-  
-  // Handle email field changes
-  const field = fields.find(f => f.id === fieldId);  // MOVED THIS UP - define field before using it
-  if (field && (field.type === 'EMAIL' || field.type === 'email')) {
-    handleEmailFieldChange(fieldId, value);
-  }
-};
+  const handleFieldValueChange = (fieldId, value) => {
+    console.log('Field value change:', { fieldId, value });
+    
+    if (onFieldValueChange) {
+      onFieldValueChange(fieldId, value);
+    } else {
+      setLocalFormValues(prev => ({ ...prev, [fieldId]: value }));
+    }
+    
+    // Track user interaction
+    if (!hasUserInteracted) {
+      setHasUserInteracted(true);
+    }
+    
+    // Track which fields have been touched
+    setTouchedFields(prev => new Set([...prev, fieldId]));
+    
+    // Clear errors for this field when value changes and field now has value
+    if (formErrors[fieldId] && value && (typeof value !== 'string' || value.trim() !== '')) {
+      setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldId];
+        return newErrors;
+      });
+    }
+    
+    // Handle email field changes
+    const field = fields.find(f => f.id === fieldId);
+    if (field && (field.type === 'EMAIL' || field.type === 'email')) {
+      handleEmailFieldChange(fieldId, value);
+    }
+  };
 
   // Enhanced email field handling with professional feedback
   const handleEmailFieldChange = (fieldId, email) => {
     if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       const isAlreadyRecognized = recognizedEmails.some(e => e.email === email);
       if (!isAlreadyRecognized) {
-        showNotification('New email address detected. It will be saved for future use.', 'info');
+        notifications.showInfo('Email Detected', 'New email address detected. It will be saved for future use.');
       } else {
         const existingEmail = recognizedEmails.find(e => e.email === email);
         if (existingEmail && currentEmail?.email !== email) {
           switchToEmail(existingEmail);
-          showNotification('Switched to previously used email address.', 'success');
+          notifications.showSuccess('Email Switched', 'Switched to previously used email address.');
         }
       }
     }
   };
 
-
   // Professional form validation with detailed feedback
-const validateFormWithFeedback = () => {
-  console.log('=== VALIDATION START ===');
-  console.log('Fields to validate:', fields.length);
-  console.log('Current form values:', Object.keys(currentFormValues).length);
-  
-  const errors = {};
-  let hasErrors = false;
-  
-  // Filter out section headers from validation
-  const validatableFields = fields.filter(field => 
-    field && field.type !== 'SECTION_HEADER' && field.id
-  );
-  
-  console.log('Validatable fields:', validatableFields.length);
-  
-  validatableFields.forEach(field => {
-    // FIXED: Check if field is required using both validation array and required property
-    const isRequired = (field.validations && Array.isArray(field.validations) && 
-      field.validations.some(v => v && v.type === 'required')) || field.required === true;
+  const validateFormWithFeedback = () => {
+    console.log('=== VALIDATION START ===');
+    console.log('Fields to validate:', fields.length);
+    console.log('Current form values:', Object.keys(currentFormValues).length);
     
-    const fieldValue = currentFormValues[field.id];
+    const errors = {};
+    let hasErrors = false;
     
-    console.log(`Checking field ${field.id}:`, {
-      type: field.type,
-      required: isRequired,
-      hasValue: !!fieldValue,
-      value: fieldValue
-    });
+    // Filter out section headers from validation
+    const validatableFields = fields.filter(field => 
+      field && field.type !== 'SECTION_HEADER' && field.id
+    );
     
-    if (isRequired) {
-      let isEmpty = false;
+    console.log('Validatable fields:', validatableFields.length);
+    
+    validatableFields.forEach(field => {
+      const isRequired = (field.validations && Array.isArray(field.validations) && 
+        field.validations.some(v => v && v.type === 'required')) || field.required === true;
       
-      switch (field.type?.toUpperCase()) {
-        case 'CHECKBOXES':
-          isEmpty = !Array.isArray(fieldValue) || fieldValue.length === 0;
-          break;
-        case 'FILE_UPLOAD':
-          isEmpty = !fieldValue;
-          break;
-        case 'LINEAR_SCALE':
-          isEmpty = !fieldValue || fieldValue === '' || fieldValue === null;
-          break;
-        case 'MULTIPLE_CHOICE':
-        case 'DROPDOWN':
-          isEmpty = !fieldValue || fieldValue === '';
-          break;
-        default:
-          isEmpty = !fieldValue || (typeof fieldValue === 'string' && fieldValue.trim() === '');
-          break;
-      }
+      const fieldValue = currentFormValues[field.id];
       
-      if (isEmpty) {
-        const fieldName = field.question || 'This field';
-        errors[field.id] = [`${fieldName} is required`];
-        hasErrors = true;
-        console.log(`Field ${field.id} failed validation: required but empty`);
-      }
-    }
-    
-    // Additional type-specific validations for non-empty values
-    if (fieldValue && typeof fieldValue === 'string' && fieldValue.trim() !== '') {
-      switch (field.type?.toUpperCase()) {
-        case 'EMAIL':
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue.trim())) {
-            errors[field.id] = ['Please enter a valid email address'];
-            hasErrors = true;
-          }
-          break;
-        case 'URL':
-          try {
-            new URL(fieldValue.trim());
-          } catch {
-            errors[field.id] = ['Please enter a valid URL'];
-            hasErrors = true;
-          }
-          break;
-        case 'NUMBER':
-          if (isNaN(Number(fieldValue.trim()))) {
-            errors[field.id] = ['Please enter a valid number'];
-            hasErrors = true;
-          }
-          break;
-      }
-    }
-  });
-  
-  console.log('=== VALIDATION END ===');
-  console.log('Has errors:', hasErrors);
-  console.log('Error count:', Object.keys(errors).length);
-  
-  if (hasErrors) {
-    setFormErrors(errors);
-    
-    const errorCount = Object.keys(errors).length;
-    const fieldNames = Object.keys(errors).map(fieldId => {
-      const field = fields.find(f => f.id === fieldId);
-      return field?.question || 'Unnamed field';
-    }).slice(0, 3);
-    
-    const fieldList = fieldNames.length > 2 
-      ? `${fieldNames.slice(0, -1).join(', ')}, and ${fieldNames.slice(-1)[0]}`
-      : fieldNames.join(' and ');
-    
-    setValidationAlert({
-      show: true,
-      data: {
-        title: 'Form Validation Required',
-        message: `Please complete the following required field${errorCount > 1 ? 's' : ''}: ${fieldList}${errorCount > 3 ? ` and ${errorCount - 3} more` : ''}.`,
-        type: 'warning'
-      }
-    });
-    
-    // Scroll to first error
-    const firstErrorFieldId = Object.keys(errors)[0];
-    const firstErrorElement = document.querySelector(`[data-field-id="${firstErrorFieldId}"]`);
-    if (firstErrorElement) {
-      firstErrorElement.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center' 
+      console.log(`Checking field ${field.id}:`, {
+        type: field.type,
+        required: isRequired,
+        hasValue: !!fieldValue,
+        value: fieldValue
       });
-    }
-    
-    return false;
-  }
-  
-  setFormErrors({});
-  return true;
-};
-
-  // Enhanced submit handler with professional error handling
- const handleSubmit = async () => {
-  console.log('=== FORM SUBMIT START ===');
-  
-  // Use your existing validateFormWithFeedback function
-  if (!validateFormWithFeedback()) {
-    console.log('Form validation failed - stopping submission');
-    return;
-  }
-
-  if (!isOnline) {
-    showNotification('Please check your internet connection and try again.', 'error');
-    return;
-  }
-
-  try {
-    showNotification('Submitting your response...', 'info');
-    
-    const emailField = fields.find(f => f.type === 'EMAIL' || f.type === 'email');
-    const email = emailField ? currentFormValues[emailField.id] : null;
-
-    // Enhanced email recognition
-    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      const isAlreadyRecognized = recognizedEmails.some(e => e.email === email);
-      if (!isAlreadyRecognized) {
-        addEmail(email);
-      } else {
-        const existingEmail = recognizedEmails.find(e => e.email === email);
-        if (existingEmail) {
-          switchToEmail(existingEmail);
+      
+      if (isRequired) {
+        let isEmpty = false;
+        
+        switch (field.type?.toUpperCase()) {
+          case 'CHECKBOXES':
+            isEmpty = !Array.isArray(fieldValue) || fieldValue.length === 0;
+            break;
+          case 'FILE_UPLOAD':
+            isEmpty = !fieldValue;
+            break;
+          case 'LINEAR_SCALE':
+            isEmpty = !fieldValue || fieldValue === '' || fieldValue === null;
+            break;
+          case 'MULTIPLE_CHOICE':
+          case 'DROPDOWN':
+            isEmpty = !fieldValue || fieldValue === '';
+            break;
+          default:
+            isEmpty = !fieldValue || (typeof fieldValue === 'string' && fieldValue.trim() === '');
+            break;
+        }
+        
+        if (isEmpty) {
+          const fieldName = field.question || 'This field';
+          errors[field.id] = [`${fieldName} is required`];
+          hasErrors = true;
+          console.log(`Field ${field.id} failed validation: required but empty`);
         }
       }
+      
+      // Additional type-specific validations for non-empty values
+      if (fieldValue && typeof fieldValue === 'string' && fieldValue.trim() !== '') {
+        switch (field.type?.toUpperCase()) {
+          case 'EMAIL':
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue.trim())) {
+              errors[field.id] = ['Please enter a valid email address'];
+              hasErrors = true;
+            }
+            break;
+          case 'URL':
+            try {
+              new URL(fieldValue.trim());
+            } catch {
+              errors[field.id] = ['Please enter a valid URL'];
+              hasErrors = true;
+            }
+            break;
+          case 'NUMBER':
+            if (isNaN(Number(fieldValue.trim()))) {
+              errors[field.id] = ['Please enter a valid number'];
+              hasErrors = true;
+            }
+            break;
+        }
+      }
+    });
+    
+    console.log('=== VALIDATION END ===');
+    console.log('Has errors:', hasErrors);
+    console.log('Error count:', Object.keys(errors).length);
+    
+    if (hasErrors) {
+      setFormErrors(errors);
+      
+      const errorCount = Object.keys(errors).length;
+      const fieldNames = Object.keys(errors).map(fieldId => {
+        const field = fields.find(f => f.id === fieldId);
+        return field?.question || 'Unnamed field';
+      }).slice(0, 3);
+      
+      const fieldList = fieldNames.length > 2 
+        ? `${fieldNames.slice(0, -1).join(', ')}, and ${fieldNames.slice(-1)[0]}`
+        : fieldNames.join(' and ');
+      
+      setValidationAlert({
+        show: true,
+        data: {
+          title: 'Form Validation Required',
+          message: `Please complete the following required field${errorCount > 1 ? 's' : ''}: ${fieldList}${errorCount > 3 ? ` and ${errorCount - 3} more` : ''}.`,
+          type: 'warning'
+        }
+      });
+      
+      // Scroll to first error
+      const firstErrorFieldId = Object.keys(errors)[0];
+      const firstErrorElement = document.querySelector(`[data-field-id="${firstErrorFieldId}"]`);
+      if (firstErrorElement) {
+        firstErrorElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }
+      
+      return false;
     }
-
-    const submissionData = {
-      email: email || null,
-      responses: currentFormValues,
-      submittedAt: new Date().toISOString(),
-      userAgent: navigator.userAgent
-    };
-
-    console.log('Submitting form response:', submissionData);
-    const response = await submitResponse(formData.id, submissionData);
-    console.log('Form submitted successfully:', response.data);
     
-    showNotification('Your response has been successfully submitted!', 'success');
-    setShowSuccessModal(true);
+    setFormErrors({});
+    return true;
+  };
 
-  } catch (error) {
-    console.error('Error submitting form:', error);
+  // Enhanced submit handler with professional error handling
+  const handleSubmit = async () => {
+    console.log('=== FORM SUBMIT START ===');
     
-    let errorMessage = 'An unexpected error occurred. Please try again.';
-    
-    if (error.response?.status === 404) {
-      errorMessage = 'This form is no longer available. Please contact the form owner.';
-    } else if (error.response?.status === 400) {
-      errorMessage = 'Invalid form data. Please review your responses and try again.';
-    } else if (error.response?.status === 413) {
-      errorMessage = 'Submission too large. Please reduce file sizes or remove attachments.';
-    } else if (!isOnline) {
-      errorMessage = 'Connection lost during submission. Please check your internet connection.';
-    }
-    
-    showNotification(errorMessage, 'error');
-  }
-};
-
-  // Enhanced form saving with professional feedback
-  const saveForm = async () => {
-    if (!formData.title?.trim()) {
-      showNotification('Please enter a form title before saving.', 'warning');
+    if (!validateFormWithFeedback()) {
+      console.log('Form validation failed - stopping submission');
       return;
     }
 
     if (!isOnline) {
-      showNotification('Connection required to save. Changes will be saved once online.', 'warning');
+      notifications.showError('Connection Required', 'Please check your internet connection and try again.');
       return;
     }
 
+    try {
+      notifications.showInfo('Submitting...', 'Submitting your response...');
+      
+      const emailField = fields.find(f => f.type === 'EMAIL' || f.type === 'email');
+      const email = emailField ? currentFormValues[emailField.id] : null;
+
+      // Enhanced email recognition
+      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        const isAlreadyRecognized = recognizedEmails.some(e => e.email === email);
+        if (!isAlreadyRecognized) {
+          addEmail(email);
+        } else {
+          const existingEmail = recognizedEmails.find(e => e.email === email);
+          if (existingEmail) {
+            switchToEmail(existingEmail);
+          }
+        }
+      }
+
+      const submissionData = {
+        email: email || null,
+        responses: currentFormValues,
+        submittedAt: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      };
+
+      console.log('Submitting form response:', submissionData);
+      const response = await submitResponse(formData.id, submissionData);
+      console.log('Form submitted successfully:', response.data);
+      
+      notifications.showPredefined('FORM_SUBMIT_SUCCESS');
+      setShowSuccessModal(true);
+
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      
+      let errorTitle = 'Submission Failed';
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
+      if (error.response?.status === 404) {
+        errorMessage = 'This form is no longer available. Please contact the form owner.';
+      } else if (error.response?.status === 400) {
+        errorMessage = 'Invalid form data. Please review your responses and try again.';
+      } else if (error.response?.status === 413) {
+        errorMessage = 'Submission too large. Please reduce file sizes or remove attachments.';
+      } else if (!isOnline) {
+        errorMessage = 'Connection lost during submission. Please check your internet connection.';
+      }
+      
+      notifications.showError(errorTitle, errorMessage);
+    }
+  };
+
+  // Enhanced form saving with professional feedback and confirmation
+  const handleSaveFormClick = () => {
+    if (!formData.title?.trim()) {
+      notifications.showWarning('Title Required', 'Please enter a form title before saving.');
+      return;
+    }
+
+    if (!isOnline) {
+      notifications.showWarning('Connection Required', 'Connection required to save. Changes will be saved once online.');
+      return;
+    }
+
+    // Show confirmation modal
+    setShowSaveConfirmation(true);
+  };
+
+  const saveForm = async () => {
     setIsSaving(true);
     setSaveStatus(null);
 
@@ -571,51 +475,22 @@ const validateFormWithFeedback = () => {
 
       if (isFormSaved && formData.id) {
         response = await updateForm(formData.id, formPayload);
-        showNotification('Form updated successfully!', 'success');
+        notifications.showSuccess('Form Updated', 'Form updated successfully!');
       } else {
         response = await createForm(formPayload);
-        showNotification('Form created successfully!', 'success');
+        notifications.showSuccess('Form Created', 'Form created successfully!');
       }
 
       if (templateFields && templateFields.length > 0 && convertTemplateToRegularFields) {
         await convertTemplateToRegularFields();
       }
 
-      setIsResetting(true);
-
-      setFormData({
-        id: isNewForm ? response.data.id : formData.id,
-        title: 'Untitled Form',
-        description: '',
-        headerImage: null,
-        backgroundColor: '#ffffff',
-        accentColor: '#4285f4',
-        logo: null,
-        settings: {
-          collectEmails: false,
-          requireLogin: false,
-          limitResponses: false,
-          maxResponses: '',
-          allowMultiple: true,
-          showProgressBar: true,
-          shuffleQuestions: false,
-          consentRequired: true,
-          language: 'en',
-          confirmationMessage: 'Thank you! Your response has been recorded.',
-          redirectUrl: '',
-          customBranding: true,
-          theme: 'blue'
-        }
-      });
-
-      if (typeof setFields === 'function') {
-        setFields([]);
-      }
-      if (typeof setTemplateFields === 'function') {
-        setTemplateFields(null);
-      }
-      if (typeof setIsLoadingTemplateFromFormBuilder === 'function') {
-        setIsLoadingTemplateFromFormBuilder(false);
+      // Update form ID if it was a new form
+      if (isNewForm && response.data.id) {
+        setFormData(prev => ({
+          ...prev,
+          id: response.data.id
+        }));
       }
 
       queryClient.invalidateQueries(['fields', formData.id]);
@@ -623,16 +498,15 @@ const validateFormWithFeedback = () => {
 
       setIsFormSaved(true);
       setSaveStatus('success');
-      setActiveField(null);
-      setFormValues({});
-
-      setTimeout(() => setIsResetting(false), 100);
 
       console.log('Form saved successfully:', response.data);
     } catch (error) {
       setSaveStatus('error');
       console.error('Error saving form:', error);
+      
+      let errorTitle = 'Save Failed';
       let errorMessage = 'Failed to save form. Please try again.';
+      
       if (error.response?.status === 400) {
         errorMessage = 'Invalid form data. Please check your fields.';
       } else if (error.response?.status === 413) {
@@ -640,7 +514,8 @@ const validateFormWithFeedback = () => {
       } else if (error.response?.status === 403) {
         errorMessage = 'Permission denied. Please check your access rights.';
       }
-      showNotification(errorMessage, 'error');
+      
+      notifications.showError(errorTitle, errorMessage);
     } finally {
       setIsSaving(false);
       setTimeout(() => setSaveStatus(null), 3000);
@@ -648,7 +523,7 @@ const validateFormWithFeedback = () => {
   };
 
   const resetForm = () => {
-    // Reset form values
+    // Only reset form VALUES, not the form structure
     if (onFieldValueChange) {
       fields.forEach(field => {
         onFieldValueChange(field.id, '');
@@ -657,40 +532,9 @@ const validateFormWithFeedback = () => {
       setLocalFormValues({});
     }
     
-    // Reset formData to initial state
-    setFormData({
-      id: formData.id, // Preserve the form ID
-      title: 'Untitled Form',
-      description: '',
-      headerImage: null,
-      backgroundColor: '#ffffff',
-      accentColor: '#4285f4',
-      logo: null,
-      settings: {
-        collectEmails: false,
-        requireLogin: false,
-        limitResponses: false,
-        maxResponses: '',
-        allowMultiple: true,
-        showProgressBar: true,
-        shuffleQuestions: false,
-        consentRequired: true,
-        language: 'en',
-        confirmationMessage: 'Thank you! Your response has been recorded.',
-        redirectUrl: '',
-        customBranding: true,
-        theme: 'blue'
-      }
-    });
-
-    // Reset fields
-    if (typeof setFields === 'function') {
-      setFields([]);
-    }
-    
+    // Don't reset formData or fields - only clear errors and values
     setFormErrors({});
-    setActiveField(null);
-    showNotification('Form reset successfully.', 'info');
+    notifications.showInfo('Form Reset', 'Form values cleared successfully.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -699,86 +543,81 @@ const validateFormWithFeedback = () => {
     if (addField) {
       addField(type);
       
-      // Show appropriate notification based on template state
+      const fieldTypeName = type.replace('_', ' ').toLowerCase();
       if (templateFields && templateFields.length > 0) {
-        showNotification(`${type.replace('_', ' ').toLowerCase()} field added to template!`, 'success');
+        notifications.showSuccess('Field Added', `${fieldTypeName} field added to template!`);
       } else {
-        showNotification(`${type.replace('_', ' ').toLowerCase()} field added successfully!`, 'success');
+        notifications.showPredefined('FIELD_ADDED_SUCCESS');
       }
     }
     setShowFieldTypes(false);
   };
 
- const handleDeleteField = async (fieldIdToDelete) => {
-  try {
-    console.log('=== DELETE FIELD DEBUG ===');
-    console.log('Field ID to delete:', fieldIdToDelete);
-    console.log('All fields:', fields.map(f => ({ id: f.id, question: f.question?.substring(0, 30) })));
-    console.log('Template fields count:', templateFields?.length || 0);
-    
-    // Find the field to delete
-    const fieldToDelete = fields.find(f => f.id == fieldIdToDelete);
-    if (!fieldToDelete) {
-      console.error('Field not found in fields array');
-      showNotification('Field not found - cannot delete', 'error');
-      return;
-    }
-    
-    const fieldIdString = String(fieldIdToDelete);
-    
-    // Validate field ID
-    if (fieldIdToDelete == null || 
-        fieldIdString === 'undefined' || 
-        fieldIdString === 'name' ||
-        fieldIdString.trim() === '') {
-      console.error('Invalid field ID for deletion:', fieldIdToDelete);
-      showNotification('Cannot delete field: Invalid field ID', 'error');
-      return;
-    }
-
-    // Handle template fields differently
-    if (isTemplateField(fieldToDelete, templateFields || [])) {
-      console.log('Deleting template field - removing from local state only');
+  const handleDeleteField = async (fieldIdToDelete) => {
+    try {
+      console.log('=== DELETE FIELD DEBUG ===');
+      console.log('Field ID to delete:', fieldIdToDelete);
+      console.log('All fields:', fields.map(f => ({ id: f.id, question: f.question?.substring(0, 30) })));
+      console.log('Template fields count:', templateFields?.length || 0);
       
-      if (templateFields && setTemplateFields) {
-        const updatedTemplateFields = templateFields.filter(tf => tf.id != fieldIdToDelete);
-        setTemplateFields(updatedTemplateFields);
+      const fieldToDelete = fields.find(f => f.id == fieldIdToDelete);
+      if (!fieldToDelete) {
+        console.error('Field not found in fields array');
+        notifications.showError('Field Not Found', 'Field not found - cannot delete');
+        return;
       }
       
-      if (setFields) {
-        const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
-        setFields(updatedFields);
+      const fieldIdString = String(fieldIdToDelete);
+      
+      if (fieldIdToDelete == null || 
+          fieldIdString === 'undefined' || 
+          fieldIdString === 'name' ||
+          fieldIdString.trim() === '') {
+        console.error('Invalid field ID for deletion:', fieldIdToDelete);
+        notifications.showError('Invalid Field', 'Cannot delete field: Invalid field ID');
+        return;
+      }
+
+      if (isTemplateField(fieldToDelete, templateFields || [])) {
+        console.log('Deleting template field - removing from local state only');
+        
+        if (templateFields && setTemplateFields) {
+          const updatedTemplateFields = templateFields.filter(tf => tf.id != fieldIdToDelete);
+          setTemplateFields(updatedTemplateFields);
+        }
+        
+        if (setFields) {
+          const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
+          setFields(updatedFields);
+        }
+        
+        notifications.showSuccess('Field Removed', 'Template field removed successfully');
+      } else {
+        if (typeof deleteField === 'function') {
+          await deleteField(fieldIdToDelete);
+          notifications.showPredefined('FIELD_DELETED_SUCCESS');
+        }
+      }
+
+      if (activeField == fieldIdToDelete) {
+        setActiveField(null);
+      }
+
+    } catch (error) {
+      console.error('Error in handleDeleteField:', error);
+      let errorMessage = 'Failed to delete field';
+      
+      if (error.response?.status === 404) {
+        errorMessage = 'Field not found - may have been already deleted';
+        if (setFields) {
+          const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
+          setFields(updatedFields);
+        }
       }
       
-      showNotification('Template field removed successfully', 'success');
-    } else {
-      // For regular saved fields, call the API
-      if (typeof deleteField === 'function') {
-        await deleteField(fieldIdToDelete);
-        showNotification('Field deleted successfully', 'success');
-      }
+      notifications.showError('Delete Failed', errorMessage);
     }
-
-    // Clear active field if it was the deleted one
-    if (activeField == fieldIdToDelete) {
-      setActiveField(null);
-    }
-
-  } catch (error) {
-    console.error('Error in handleDeleteField:', error);
-    let errorMessage = 'Failed to delete field';
-    
-    if (error.response?.status === 404) {
-      errorMessage = 'Field not found - may have been already deleted';
-      if (setFields) {
-        const updatedFields = fields.filter(f => f.id != fieldIdToDelete);
-        setFields(updatedFields);
-      }
-    }
-    
-    showNotification(errorMessage, 'error');
-  }
-};
+  };
 
   const handleColorChange = (newColor) => {
     setFormData(prev => ({ 
@@ -786,14 +625,13 @@ const validateFormWithFeedback = () => {
       accentColor: newColor 
     }));
     
-    showNotification('Form color theme updated!', 'success');
+    notifications.showSuccess('Theme Updated', 'Form color theme updated!');
     
     const currentActive = activeField;
     setActiveField(null);
     setTimeout(() => setActiveField(currentActive), 10);
   };
 
-  // Enhanced clear form handler
   const handleFillAnother = () => {
     if (onFieldValueChange) {
       fields.forEach(field => {
@@ -805,14 +643,12 @@ const validateFormWithFeedback = () => {
     setFormErrors({});
     resetForm();
     setShowSuccessModal(false);
-    showNotification('Form cleared and ready for new response.', 'success');
+    notifications.showInfo('Form Cleared', 'Form cleared and ready for new response.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCloseSuccess = () => {
-    resetForm();
-    setShowSuccessModal(false);
-    setCurrentPreviewMode(false);
+    // Only clear form values, not the form structure
     if (onFieldValueChange) {
       fields.forEach(field => {
         onFieldValueChange(field.id, '');
@@ -821,14 +657,16 @@ const validateFormWithFeedback = () => {
       setLocalFormValues({});
     }
     setFormErrors({});
-    showNotification('Returned to form builder.', 'info');
+    setShowSuccessModal(false);
+    setCurrentPreviewMode(false);
+    notifications.showInfo('Returned to Builder', 'Returned to form builder.');
   };
 
   const addFieldFromLibrary = (template) => {
     const formId = parseInt(formData.id, 10);
     const newField = {
       id: uuidv4(),
-      formId: isNaN(formId) ? null : formId, // Will be updated by addField if null
+      formId: isNaN(formId) ? null : formId,
       type: template.type.toUpperCase().replace('-', '_'),
       question: template.question || `New ${template.type.toLowerCase().replace('-', ' ')} question`,
       required: template.required || false,
@@ -844,6 +682,8 @@ const validateFormWithFeedback = () => {
     };
     console.log('Adding field from library:', newField);
     addField(newField.type, newField);
+    
+    notifications.showSuccess('Library Field Added', `${template.question || template.type} added from library!`);
   };
 
   const exportForm = () => {
@@ -861,7 +701,7 @@ const validateFormWithFeedback = () => {
     a.click();
     URL.revokeObjectURL(url);
     
-    showNotification('Form exported successfully!', 'success');
+    notifications.showSuccess('Export Successful', 'Form exported successfully!');
   };
 
   const getDeviceClass = () => {
@@ -906,11 +746,9 @@ const validateFormWithFeedback = () => {
 
   // Enhanced preview mode with validation indicators
   if (currentPreviewMode) {
-    // Only validate after user has attempted to submit or interacted with fields
     const hasUserInteracted = Object.keys(currentFormValues).length > 0;
     const validation = hasUserInteracted ? validateForm(fields, currentFormValues) : { hasErrors: false, errors: {} };
     
-    // Count only non-section fields for display
     const actualFormFields = fields.filter(field => field.type !== 'SECTION_HEADER');
     const requiredFields = actualFormFields.filter(field => 
       field.validations?.some(v => v.type === 'required') || field.required
@@ -918,7 +756,6 @@ const validateFormWithFeedback = () => {
     
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* Connection status indicator */}
         {!isOnline && (
           <div className="fixed top-4 left-4 z-40 bg-red-100 border border-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
             <WifiOff className="w-4 h-4" />
@@ -991,7 +828,6 @@ const validateFormWithFeedback = () => {
               />
               
               <div className="p-4 lg:p-8 space-y-4 lg:space-y-6">
-                {/* Email Recognition Banner */}
                 {(fields.some(f => f.type === 'EMAIL' || f.type === 'email') || recognizedEmails.length > 0) && (
                   <EmailRecognitionBanner
                     currentEmail={currentEmail}
@@ -1021,7 +857,7 @@ const validateFormWithFeedback = () => {
                     previewMode={true}
                     formData={formData}
                     formErrors={formErrors}
-                    isTemplateField={false} // Always false in preview mode
+                    isTemplateField={false}
                     templateFields={templateFields} 
                     deleteField={handleDeleteField}
                   />
@@ -1049,7 +885,7 @@ const validateFormWithFeedback = () => {
                             setLocalFormValues({});
                           }
                           setFormErrors({});
-                          showNotification('Form cleared successfully.', 'info');
+                          notifications.showInfo('Form Cleared', 'Form cleared successfully.');
                         }}
                         className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                       >
@@ -1077,7 +913,6 @@ const validateFormWithFeedback = () => {
           </div>
         </div>
 
-        {/* Enhanced Success Modal */}
         <ProfessionalSuccessModal 
           isVisible={showSuccessModal}
           onClose={handleCloseSuccess}
@@ -1085,15 +920,13 @@ const validateFormWithFeedback = () => {
           formTitle={formData.title}
         />
         
-        {/* Validation Alert */}
         <ProfessionalAlert
-          isVisible={validationAlert.show}
+          isOpen={validationAlert.show}
           onClose={() => setValidationAlert({ show: false, data: {} })}
           title={validationAlert.data.title}
           message={validationAlert.data.message}
           type={validationAlert.data.type}
           onConfirm={() => {
-            // Scroll to first error
             const firstErrorField = Object.keys(formErrors)[0];
             if (firstErrorField) {
               const element = document.querySelector(`[data-field-id="${firstErrorField}"]`);
@@ -1108,10 +941,9 @@ const validateFormWithFeedback = () => {
     );
   }
 
-  // Enhanced Builder interface with improved UX
+  // Enhanced Builder interface
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row overflow-hidden">
-      {/* Mobile Header */}
       <div className="lg:hidden bg-white border-b shadow-sm">
         <div className="px-4 py-3 flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-800">Form Builder</h1>
@@ -1148,7 +980,6 @@ const validateFormWithFeedback = () => {
           </div>
         </div>
         
-        {/* Mobile Field Types */}
         {showFieldTypes && (
           <div className="p-4 border-t bg-gray-50 max-h-80 overflow-y-auto">
             <div className="space-y-3">
@@ -1178,7 +1009,6 @@ const validateFormWithFeedback = () => {
           </div>
         )}
 
-        {/* Mobile Fields List */}
         {fields.length > 0 && (
           <div className="p-4 border-t bg-white">
             <div className="flex items-center justify-between mb-3">
@@ -1187,7 +1017,7 @@ const validateFormWithFeedback = () => {
                 <button
                   onClick={() => {
                     clearTemplateState();
-                    showNotification('Template cleared successfully.', 'info');
+                    notifications.showPredefined('TEMPLATE_CLEARED');
                   }}
                   className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
                 >
@@ -1232,7 +1062,7 @@ const validateFormWithFeedback = () => {
                           onClick={() => {
                             if (duplicateField) {
                               duplicateField(field.id);
-                              showNotification('Field duplicated successfully!', 'success');
+                              notifications.showPredefined('FIELD_DUPLICATE_SUCCESS');
                             }
                           }}
                           className="p-2 text-gray-400 hover:text-green-600 transition-colors"
@@ -1242,12 +1072,9 @@ const validateFormWithFeedback = () => {
                         </button>
                         <button
                           onClick={() => {
-                            if (deleteField) {
-                              deleteField(field.id);
-                              if (activeField === field.id) {
-                                setActiveField(null);
-                              }
-                              showNotification('Field deleted successfully.', 'info');
+                            handleDeleteField(field.id);
+                            if (activeField === field.id) {
+                              setActiveField(null);
                             }
                           }}
                           className="p-2 text-gray-400 hover:text-red-600 transition-colors"
@@ -1264,7 +1091,6 @@ const validateFormWithFeedback = () => {
           </div>
         )}
 
-        {/* Mobile Color Palette */}
         <div className="p-4 border-t bg-gray-50">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Theme Color</h3>
           <div className="grid grid-cols-8 gap-2">
@@ -1285,7 +1111,6 @@ const validateFormWithFeedback = () => {
         </div>
       </div>
 
-      {/* Desktop Sidebar - Enhanced */}
       <div className="hidden lg:flex w-80 bg-white border-r shadow-lg flex-col flex-shrink-0">
         <div className="p-6 border-b">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Form Builder</h1>
@@ -1340,7 +1165,6 @@ const validateFormWithFeedback = () => {
           )}
         </div>
 
-        {/* Enhanced fields list */}
         <div className="min-h-0 overflow-y-auto p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Form Fields</h3>
@@ -1348,7 +1172,7 @@ const validateFormWithFeedback = () => {
               <button
                 onClick={() => {
                   clearTemplateState();
-                  showNotification('Template cleared successfully.', 'info');
+                  notifications.showPredefined('TEMPLATE_CLEARED');
                 }}
                 className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
               >
@@ -1396,7 +1220,7 @@ const validateFormWithFeedback = () => {
                             e.stopPropagation();
                             if (duplicateField) {
                               duplicateField(field.id);
-                              showNotification('Field duplicated!', 'success');
+                              notifications.showPredefined('FIELD_DUPLICATE_SUCCESS');
                             }
                           }}
                           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -1407,12 +1231,9 @@ const validateFormWithFeedback = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (deleteField) {
-                              deleteField(field.id);
-                              if (activeField === field.id) {
-                                setActiveField(null);
-                              }
-                              showNotification('Field deleted.', 'info');
+                            handleDeleteField(field.id);
+                            if (activeField === field.id) {
+                              setActiveField(null);
                             }
                           }}
                           className="p-1 text-gray-400 hover:text-red-600 transition-colors"
@@ -1429,7 +1250,6 @@ const validateFormWithFeedback = () => {
           )}
         </div>
 
-        {/* Enhanced form settings */}
         <div className="p-4 border-t">
           <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Form Settings</h3>
           <div className="space-y-3">
@@ -1465,19 +1285,14 @@ const validateFormWithFeedback = () => {
         </div>
       </div>
 
-      {/* Main Content Area - Enhanced */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
-        {/* top bar */}
         <div className="bg-white border-b shadow-sm">
           <div className="px-4 lg:px-6 py-4 flex items-center justify-between gap-4">
-            {/* Left section with title and controls - flex-1 to take available space */}
             <div className="flex items-center gap-2 lg:gap-4 flex-1 min-w-0">
-              {/* Title with proper truncation */}
               <h2 className="text-lg lg:text-xl font-bold text-gray-800 truncate flex-shrink min-w-0 max-w-xs lg:max-w-md">
                 {formData.title}
               </h2>
               
-              {/* Controls section */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 {!isOnline && (
                   <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
@@ -1508,7 +1323,6 @@ const validateFormWithFeedback = () => {
               </div>
             </div>
             
-            {/* Right section - flex-shrink-0 to prevent shrinking */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => setCurrentShowShareModal(true)}
@@ -1532,7 +1346,7 @@ const validateFormWithFeedback = () => {
                 <span className="hidden sm:inline">Export</span>
               </button>
               <button
-                onClick={saveForm}
+                onClick={handleSaveFormClick}
                 disabled={isSaving}
                 className={`flex items-center gap-1 lg:gap-2 px-3 lg:px-4 py-2 rounded-lg transition-colors font-medium text-sm lg:text-base flex-shrink-0 ${
                   isSaving 
@@ -1570,7 +1384,6 @@ const validateFormWithFeedback = () => {
           </div>
         </div>
 
-        {/* Enhanced main content area */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 min-w-0">
           <div className={getDeviceClass()}>
             <div className="bg-white rounded-xl lg:rounded-2xl shadow-xl lg:shadow-2xl overflow-hidden w-full">
@@ -1599,7 +1412,6 @@ const validateFormWithFeedback = () => {
               )}
 
               <div className="p-4 lg:p-8 space-y-4 lg:space-y-6">
-                {/* Template fields indicator */}
                 {templateFields && templateFields.length > 0 && (
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
@@ -1613,7 +1425,7 @@ const validateFormWithFeedback = () => {
                         <button
                           onClick={() => {
                             clearTemplateState();
-                            showNotification('Template cleared successfully.', 'info');
+                            notifications.showPredefined('TEMPLATE_CLEARED');
                           }}
                           className="text-xs text-purple-600 hover:text-purple-800 underline"
                         >
@@ -1691,7 +1503,6 @@ const validateFormWithFeedback = () => {
         </div>
       </div>
 
-      {/* Enhanced modals and components */}
       <QuestionLibrary 
         onAddQuestion={addFieldFromLibrary}
         showLibrary={showQuestionLibrary}
@@ -1707,16 +1518,17 @@ const validateFormWithFeedback = () => {
         formTitle={formData.title} 
       />
 
-      {/* Toast Notification */}
-      {notification && (
-        <ToastNotification
-          message={notification.message}
-          type={notification.type}
-          onClose={() => setNotification(null)}
-        />
-      )}
+      <ConfirmationModal
+        isOpen={showSaveConfirmation}
+        onClose={() => setShowSaveConfirmation(false)}
+        onConfirm={saveForm}
+        title="Save Form"
+        message={`Are you sure you want to ${isFormSaved ? 'update' : 'save'} this form? ${!isFormSaved ? 'This will create a new form in your account.' : 'This will update the existing form with your changes.'}`}
+        type="info"
+        confirmText={isFormSaved ? 'Update Form' : 'Save Form'}
+        cancelText="Cancel"
+      />
 
-      {/* CSS for animations */}
       <style jsx>{`
         .animate-scale-in {
           animation: scaleIn 0.3s ease-out forwards;
